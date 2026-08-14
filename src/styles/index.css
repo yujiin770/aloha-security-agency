@@ -1,0 +1,274 @@
+@import 'tailwindcss';
+
+/* ---------------------------------------------------------------------------
+   Aloha Security Agency — Design System
+   Theme: professional, government-grade, security-operations-center inspired.
+   Deliberately avoids glassmorphism, neon, and startup-SaaS visual language.
+--------------------------------------------------------------------------- */
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  /* Brand ---------------------------------------------------------------- */
+  --color-brand-50: #fdeceb;
+  --color-brand-100: #fbd5d1;
+  --color-brand-200: #f6aaa3;
+  --color-brand-300: #f08075;
+  --color-brand-400: #eb5647;
+  --color-brand-500: #e23828; /* Primary Red */
+  --color-brand-600: #c92e20;
+  --color-brand-700: #b71c1c; /* Dark Red */
+  --color-brand-800: #8e1616;
+  --color-brand-900: #661010;
+
+  --color-ink: #111111; /* Black */
+  --color-ink-soft: #1c1c1c;
+  --color-ink-muted: #2a2a2a;
+
+  --color-laurel-500: #4f7f34; /* Laurel Green */
+  --color-laurel-600: #416a2b;
+  --color-laurel-100: #e7f0e1;
+
+  /* Neutrals ------------------------------------------------------------- */
+  --color-surface: #ffffff;
+  --color-canvas: #fafafa; /* Light Background */
+  --color-line: #e5e7eb; /* Border */
+
+  /* Semantic ------------------------------------------------------------- */
+  --color-success: #2e7d32;
+  --color-success-soft: #e8f2e9;
+  --color-warning: #f59e0b;
+  --color-warning-soft: #fef3e2;
+  --color-danger: #d32f2f;
+  --color-danger-soft: #fbeaea;
+  --color-info: #2563eb;
+  --color-info-soft: #e8effd;
+
+  /* Typography ----------------------------------------------------------- */
+  /* Manrope is a named fallback only — not self-hosted, so it costs nothing
+     and needs no CSP change. Inter is loaded via @fontsource in main.tsx. */
+  --font-sans:
+    'Inter', 'Manrope', ui-sans-serif, system-ui, -apple-system, 'Segoe UI',
+    sans-serif;
+  --font-mono: ui-monospace, 'Cascadia Mono', 'Consolas', monospace;
+
+  /* Shape ---------------------------------------------------------------- */
+  --radius-card: 12px;
+  --radius-xl: 16px; /* marketing cards */
+  --radius-2xl: 24px; /* hero panels, image frames */
+
+  /* Elevation ------------------------------------------------------------
+     Two scales on purpose. The `card`/`raised`/`overlay` set is flat and
+     corporate, which is right for dense admin tables. The `soft`/`lift` set is
+     for the marketing site, where a card should feel like it lifts toward you
+     on hover. They coexist rather than compete. */
+  --shadow-card: 0 1px 2px rgb(17 17 17 / 0.06), 0 1px 3px rgb(17 17 17 / 0.04);
+  --shadow-raised: 0 4px 12px rgb(17 17 17 / 0.1);
+  --shadow-overlay: 0 16px 48px rgb(17 17 17 / 0.24);
+
+  --shadow-soft: 0 4px 16px rgb(17 17 17 / 0.06);
+  --shadow-lift: 0 16px 40px rgb(17 17 17 / 0.12);
+  --shadow-hero: 0 24px 64px rgb(17 17 17 / 0.28);
+}
+
+/* Semantic surface tokens, flipped by the `.dark` class on <html>.
+   Components reference these, never raw palette values, so dark mode is free. */
+@layer base {
+  :root {
+    --app-bg: var(--color-canvas);
+    --app-surface: var(--color-surface);
+    --app-surface-raised: #ffffff;
+    --app-border: var(--color-line);
+    --app-text: var(--color-ink);
+    --app-text-muted: #5c5c5c;
+    --app-text-subtle: #8a8a8a;
+    --app-sidebar-bg: var(--color-ink);
+    --app-sidebar-text: #d4d4d4;
+    --app-sidebar-hover: #242424;
+    color-scheme: light;
+  }
+
+  .dark {
+    --app-bg: #0d0d0d;
+    --app-surface: #161616;
+    --app-surface-raised: #1e1e1e;
+    --app-border: #2e2e2e;
+    --app-text: #f2f2f2;
+    --app-text-muted: #a3a3a3;
+    --app-text-subtle: #7a7a7a;
+    --app-sidebar-bg: #000000;
+    --app-sidebar-text: #d4d4d4;
+    --app-sidebar-hover: #1c1c1c;
+    color-scheme: dark;
+  }
+
+  /* The public marketing site is always light.
+     The brief calls for an ~80% white layout and explicitly rules out dark
+     websites, so a visitor whose OS is set to dark must still get the
+     storefront as designed. This re-pins the semantic variables inside
+     `.marketing` (applied by PublicLayout) no matter what `.dark` says on
+     <html>. The admin console keeps full dark-mode support. */
+  .marketing,
+  .dark .marketing {
+    --app-bg: #fafafa;
+    --app-surface: #ffffff;
+    --app-surface-raised: #ffffff;
+    --app-border: #e5e7eb;
+    --app-text: #111111;
+    --app-text-muted: #52525b;
+    --app-text-subtle: #71717a;
+    color-scheme: light;
+    background-color: var(--app-surface);
+    color: var(--app-text);
+  }
+
+  * {
+    border-color: var(--app-border);
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+    scroll-behavior: smooth;
+  }
+
+  body {
+    margin: 0;
+    min-height: 100dvh;
+    background-color: var(--app-bg);
+    color: var(--app-text);
+    font-family: var(--font-sans);
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-weight: 600;
+    letter-spacing: -0.011em;
+  }
+
+  /* WCAG: a visible, high-contrast focus ring on every interactive element. */
+  :focus-visible {
+    outline: 2px solid var(--color-brand-500);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+
+  ::selection {
+    background-color: var(--color-brand-500);
+    color: #ffffff;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+@layer components {
+  /* Skip link for keyboard users — visually hidden until focused. */
+  .skip-link {
+    position: absolute;
+    left: -9999px;
+    z-index: 999;
+  }
+  .skip-link:focus {
+    left: 1rem;
+    top: 1rem;
+    padding: 0.5rem 1rem;
+    background: var(--color-ink);
+    color: #fff;
+    border-radius: 6px;
+  }
+
+  /* Sticky table headers used across every data table in the admin app. */
+  .table-sticky thead th {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background: var(--app-surface);
+    box-shadow: inset 0 -1px 0 var(--app-border);
+  }
+}
+
+@layer utilities {
+    .no-scrollbar {
+    -ms-overflow-style: none;  /* IE and Edge */
+    scrollbar-width: none;     /* Firefox */
+  }
+
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;             /* Chrome, Safari and Opera */
+  }
+  .scrollbar-slim {
+    scrollbar-width: thin;
+    scrollbar-color: var(--app-border) transparent;
+  }
+
+  /* Diagonal red/black hazard band used on operational status headers. */
+  .bg-command-stripe {
+    background-image: repeating-linear-gradient(
+      135deg,
+      var(--color-ink) 0 12px,
+      var(--color-brand-700) 12px 24px
+    );
+  }
+
+  /* --- Marketing site ------------------------------------------------- */
+
+
+  /* Short red rule under a section eyebrow. */
+  .rule-brand::after {
+    content: '';
+    display: block;
+    width: 2.5rem;
+    height: 3px;
+    margin-top: 0.75rem;
+    border-radius: 999px;
+    background: var(--color-brand-500);
+  }
+
+  .rule-brand-center::after {
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  /* Hover lift for marketing cards. Transform only — no layout thrash. */
+  .hover-lift {
+    transition:
+      transform 0.25s cubic-bezier(0.16, 1, 0.3, 1),
+      box-shadow 0.25s cubic-bezier(0.16, 1, 0.3, 1),
+      border-color 0.25s ease;
+  }
+  .hover-lift:hover {
+    transform: translateY(-4px);
+    box-shadow: var(--shadow-lift);
+  }
+
+  /* Display type for hero headlines: tighter tracking at large sizes, which
+     is what stops big Inter from looking loose and amateurish. */
+  .text-display {
+    font-weight: 800;
+    letter-spacing: -0.032em;
+    line-height: 1.04;
+  }
+}
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  body {
+    background: #fff;
+    color: #000;
+  }
+}
