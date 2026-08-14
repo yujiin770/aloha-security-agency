@@ -1,8 +1,8 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
-import { Building2, Pencil, Plus, PowerOff, Power } from 'lucide-react'
+import { Building2, Pencil, Plus, PowerOff, Power, Search, X } from 'lucide-react'
 import { zodResolver } from '@/lib/zodResolver'
 import { PageHeader } from '@/components/PageHeader'
 import { Card } from '@/components/ui/Card'
@@ -26,6 +26,7 @@ import {
 import { listUsers } from '@/features/users/api/usersApi'
 import { formatPercent } from '@/utils/format'
 import { cn } from '@/utils/cn'
+import { useDebouncedValue } from '@/hooks/useDebouncedValue'
 import type { BranchRow } from '@/types/database.types'
 import { ADMIN_ROLES } from '@/utils/constants'
 
@@ -84,6 +85,16 @@ export default function BranchesPage() {
   const [editing, setEditing] = useState<BranchRow | null>(null)
   const [creating, setCreating] = useState(false)
   const [toggling, setToggling] = useState<BranchRow | null>(null)
+
+  // Filters. The list is fetched whole — `listBranches(true)` returns every
+  // facility including the inactive ones — so filtering here rather than
+  // refetching keeps it instant and costs one pass over an array that is
+  // realistically in the dozens.
+  const [search, setSearch] = useState('')
+  const debouncedSearch = useDebouncedValue(search, 250)
+  const [status, setStatus] = useState<'active' | 'inactive' | ''>('')
+  const [province, setProvince] = useState('')
+  const [staffingFilter, setStaffingFilter] = useState<'understaffed' | 'filled' | ''>('')
 
   const branches = useQuery({
     queryKey: queryKeys.branches.list({ all: true }),
@@ -181,6 +192,53 @@ export default function BranchesPage() {
   const staffingFor = (branchId: string) =>
     staffing.data?.find((s) => s.branch_id === branchId)
 
+  // Provinces come from the data rather than a fixed list, so the filter only
+  // ever offers a value that will actually match something.
+  const provinces = useMemo(() => {
+    const seen = new Set<string>()
+    for (const branch of branches.data ?? []) {
+      if (branch.province?.trim()) seen.add(branch.province.trim())
+    }
+    return [...seen].sort((a, b) => a.localeCompare(b))
+  }, [branches.data])
+
+  const visible = useMemo(() => {
+    const term = debouncedSearch.trim().toLowerCase()
+
+    return (branches.data ?? []).filter((branch) => {
+      if (status === 'active' && !branch.is_active) return false
+      if (status === 'inactive' && branch.is_active) return false
+      if (province && branch.province?.trim() !== province) return false
+
+      if (staffingFilter) {
+        const vacancies = staffingFor(branch.id)?.vacancy_count ?? 0
+        if (staffingFilter === 'understaffed' && vacancies === 0) return false
+        if (staffingFilter === 'filled' && vacancies > 0) return false
+      }
+
+      if (!term) return true
+      return [
+        branch.code,
+        branch.name,
+        branch.city_municipality,
+        branch.province,
+        branch.contact_person,
+      ].some((field) => field?.toLowerCase().includes(term))
+    })
+    // `staffingFor` closes over `staffing.data`, which is the dependency that
+    // actually matters for the staffing filter.
+  }, [branches.data, staffing.data, debouncedSearch, status, province, staffingFilter]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const activeFilterCount = [status, province, staffingFilter].filter(Boolean).length
+  const isFiltered = activeFilterCount > 0 || debouncedSearch.trim().length > 0
+
+  function clearFilters() {
+    setSearch('')
+    setStatus('')
+    setProvince('')
+    setStaffingFilter('')
+  }
+
   const errors = form.formState.errors
 
   return (
@@ -197,6 +255,72 @@ export default function BranchesPage() {
         }
       />
 
+      {/* Filters ---------------------------------------------------------- */}
+      <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="relative sm:col-span-2 lg:col-span-1">
+          <Search
+            className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-[var(--app-text-subtle)]"
+            aria-hidden="true"
+          />
+          <input
+            type="search"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search code, name, city or contact…"
+            aria-label="Search facilities"
+            className="h-10 w-full rounded-lg border border-[var(--app-border)] bg-[var(--app-surface)] pl-9 text-sm text-[var(--app-text)] placeholder:text-[var(--app-text-subtle)]"
+          />
+        </div>
+
+        <Select
+          aria-label="Status"
+          placeholder="All statuses"
+          value={status}
+          onChange={(e) => setStatus(e.target.value as 'active' | 'inactive' | '')}
+          options={[
+            { value: 'active', label: 'Active' },
+            { value: 'inactive', label: 'Inactive' },
+          ]}
+        />
+
+        <Select
+          aria-label="Province"
+          placeholder="All provinces"
+          value={province}
+          onChange={(e) => setProvince(e.target.value)}
+          options={provinces.map((p) => ({ value: p, label: p }))}
+        />
+
+        <Select
+          aria-label="Staffing"
+          placeholder="Any staffing level"
+          value={staffingFilter}
+          onChange={(e) =>
+            setStaffingFilter(e.target.value as 'understaffed' | 'filled' | '')
+          }
+          options={[
+            { value: 'understaffed', label: 'Has vacancies' },
+            { value: 'filled', label: 'Fully staffed' },
+          ]}
+        />
+      </div>
+
+      {isFiltered && !branches.isLoading && (
+        <div className="mb-4 flex items-center gap-3">
+          <p className="text-sm text-[var(--app-text-muted)]">
+            {visible.length} of {branches.data?.length ?? 0} facilities
+          </p>
+          <Button
+            variant="ghost"
+            size="sm"
+            leftIcon={<X className="h-3.5 w-3.5" />}
+            onClick={clearFilters}
+          >
+            Clear filters
+          </Button>
+        </div>
+      )}
+
       {branches.isError ? (
         <Card>
           <ErrorState
@@ -210,24 +334,37 @@ export default function BranchesPage() {
             <Skeleton key={i} className="h-48 rounded-[var(--radius-card)]" />
           ))}
         </div>
-      ) : (branches.data?.length ?? 0) === 0 ? (
+      ) : visible.length === 0 ? (
         <Card>
-          <EmptyState
-            title="No Facilities yet"
-            description="Add your first client post so personnel can be deployed to it."
-            icon={<Building2 className="h-6 w-6" aria-hidden="true" />}
-            action={
-              <Can roles={[...ADMIN_ROLES]}>
-                <Button size="sm" onClick={openCreate}>
-                  New facilities
+          {isFiltered ? (
+            <EmptyState
+              title="No facilities match those filters"
+              description="Try a different search term, or clear the filters to see everything."
+              icon={<Search className="h-6 w-6" aria-hidden="true" />}
+              action={
+                <Button size="sm" variant="secondary" onClick={clearFilters}>
+                  Clear filters
                 </Button>
-              </Can>
-            }
-          />
+              }
+            />
+          ) : (
+            <EmptyState
+              title="No Facilities yet"
+              description="Add your first client post so personnel can be deployed to it."
+              icon={<Building2 className="h-6 w-6" aria-hidden="true" />}
+              action={
+                <Can roles={[...ADMIN_ROLES]}>
+                  <Button size="sm" onClick={openCreate}>
+                    New facilities
+                  </Button>
+                </Can>
+              }
+            />
+          )}
         </Card>
       ) : (
         <ul className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          {branches.data!.map((branch) => {
+          {visible.map((branch) => {
             const stats = staffingFor(branch.id)
             const fill = stats?.fill_rate_pct ?? 0
             return (

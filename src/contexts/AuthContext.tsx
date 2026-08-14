@@ -12,6 +12,7 @@ import type { Session } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
 import { queryClient } from '@/lib/queryClient'
 import { fetchSessionUser, signOut as apiSignOut, type SessionUser } from '@/features/auth/api/authApi'
+import { markDeliberateSignOut } from '@/features/auth/signOutIntent'
 import { ADMIN_ROLES } from '@/utils/constants'
 import type { AppRole } from '@/types/database.types'
 
@@ -59,7 +60,13 @@ export function useAuth(): AuthContextValue {
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null)
   const [user, setUser] = useState<SessionUser | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
+  const [isSessionLoading, setIsSessionLoading] = useState(true)
+  // Separate from the session load: `onAuthStateChange` hands us a session
+  // synchronously but the profile — and therefore `permissions` — arrives a
+  // round trip later. Without this flag `isLoading` was already false during
+  // that window, so <PageGuard> tested an empty permission list and rendered
+  // "You don't have access to this page" to an owner mid-sign-in.
+  const [isProfileLoading, setIsProfileLoading] = useState(false)
   const [isUnprovisioned, setIsUnprovisioned] = useState(false)
 
   // Guards against a slow profile fetch resolving after the user has signed
@@ -73,8 +80,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!authUser) {
       setUser(null)
       setIsUnprovisioned(false)
+      setIsProfileLoading(false)
       return
     }
+
+    // Set synchronously, before the first await, so the guards never observe a
+    // gap between "signed in" and "profile loading".
+    setIsProfileLoading(true)
 
     try {
       const sessionUser = await fetchSessionUser(authUser.id, authUser.email ?? '')
@@ -85,6 +97,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (activeUserId.current !== authUser.id) return
       setUser(null)
       setIsUnprovisioned(true)
+    } finally {
+      if (activeUserId.current === authUser.id) setIsProfileLoading(false)
     }
   }, [])
 
@@ -99,7 +113,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         await loadUser(data.session)
       })
       .finally(() => {
-        if (!cancelled) setIsLoading(false)
+        if (!cancelled) setIsSessionLoading(false)
       })
 
     const { data: subscription } = supabase.auth.onAuthStateChange(
@@ -114,6 +128,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           activeUserId.current = null
           setUser(null)
           setIsUnprovisioned(false)
+          setIsProfileLoading(false)
           queryClient.clear()
           return
         }
@@ -129,6 +144,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [loadUser])
 
   const signOut = useCallback(async () => {
+    // Records that this sign-out was deliberate. <ProtectedRoute> remembers the
+    // page a bounced-out user was heading for so login can return them to it,
+    // which is right for an expired session but wrong here: someone who signs
+    // out on Applicants and back in expects the Dashboard, not Applicants.
+    // LoginPage reads and clears this.
+    markDeliberateSignOut()
     await apiSignOut()
     queryClient.clear()
   }, [])
@@ -138,6 +159,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setSession(data.session)
     await loadUser(data.session)
   }, [loadUser])
+
+  // A signed-in user whose profile is still in flight counts as loading: the
+  // role and permission lists are not yet trustworthy, and every guard below
+  // reads them.
+  const isLoading = isSessionLoading || isProfileLoading
 
   const value = useMemo<AuthContextValue>(() => {
     const roles = user?.roles ?? []

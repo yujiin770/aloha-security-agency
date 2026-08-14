@@ -69,7 +69,13 @@ function toJson(raw: string): Json {
 export default function SettingsPage() {
   const toast = useToast()
   const qc = useQueryClient()
-  const { isAdmin } = useAuth()
+  const { isAdmin, hasRole } = useAuth()
+
+  // "Other" is the catch-all for settings keys that match none of the GROUPS
+  // prefixes — internal plumbing rather than anything an owner is meant to
+  // tune. Hidden from them by request; still visible to admin and
+  // system_administrator, who are the ones asked to diagnose it.
+  const hideUngrouped = hasRole('owner')
 
   const settings = useAllSettings()
   const update = useUpdateSetting()
@@ -114,9 +120,9 @@ export default function SettingsPage() {
     items: rows.filter((row) => row.key.startsWith(group.prefix)),
   })).filter((group) => group.items.length > 0)
 
-  const ungrouped = rows.filter(
-    (row) => !GROUPS.some((group) => row.key.startsWith(group.prefix)),
-  )
+  const ungrouped = hideUngrouped
+    ? []
+    : rows.filter((row) => !GROUPS.some((group) => row.key.startsWith(group.prefix)))
 
   return (
     <>

@@ -78,10 +78,16 @@ export default function DeploymentsPage() {
     staleTime: 5 * 60_000,
   })
 
+  // Refetched every time the dialog opens rather than served from the 30s
+  // default staleTime: someone who has just hired an applicant in another tab
+  // expects to find them here immediately, and a stale empty list reads as
+  // "the hire didn't work".
   const available = useQuery({
     queryKey: queryKeys.personnel.list({ available: true }),
     queryFn: listAvailablePersonnel,
     enabled: assignOpen,
+    staleTime: 0,
+    refetchOnMount: 'always',
   })
 
   const params = {
@@ -446,6 +452,11 @@ export default function DeploymentsPage() {
           <Field
             label="Personnel"
             required
+            // An empty dropdown has two very different causes — nobody is free,
+            // or the roster could not be read at all — and reporting both as
+            // "0 available" is what made a failed query look like a missing
+            // hire. The error is surfaced below.
+            error={available.isError ? errorMessage(available.error) : undefined}
             hint={
               available.isLoading
                 ? 'Loading…'
@@ -462,6 +473,32 @@ export default function DeploymentsPage() {
               }))}
             />
           </Field>
+
+          {available.isError ? (
+            <div className="flex items-center justify-between gap-3 rounded-lg border border-danger/30 bg-danger-soft p-3">
+              <p className="text-xs text-[var(--app-text-muted)]">
+                The personnel roster could not be loaded.
+              </p>
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={() => void available.refetch()}
+                isLoading={available.isFetching}
+              >
+                Retry
+              </Button>
+            </div>
+          ) : (
+            !available.isLoading &&
+            (available.data?.length ?? 0) === 0 && (
+              <p className="rounded-lg bg-[var(--app-bg)] p-3 text-xs text-[var(--app-text-muted)]">
+                Nobody is available. Personnel appear here once they are on the
+                roster with an <strong>active</strong> employment status and no
+                current deployment — hire an applicant from the Applicants page,
+                or end an existing deployment to free someone up.
+              </p>
+            )
+          )}
 
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="Branch / post" required>

@@ -37,6 +37,7 @@ import {
   APPLICANT_TRANSITIONS,
   applicantStatusMeta,
   documentTypeMeta,
+  sortByPipeline,
   ADMIN_ROLES,
 } from '@/utils/constants'
 import {
@@ -233,7 +234,7 @@ export default function ApplicantDetailPage() {
 
   const a = applicant.data
   const statusMeta = applicantStatusMeta(a.status)
-  const allowedMoves = APPLICANT_TRANSITIONS[a.status]
+  const allowedMoves = sortByPipeline(APPLICANT_TRANSITIONS[a.status])
 
   return (
     <>

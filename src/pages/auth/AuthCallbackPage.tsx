@@ -1,63 +1,42 @@
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
-import { supabase } from '@/lib/supabase'
+import { useLinkSession } from '@/features/auth/useLinkSession'
 
 /**
  * Landing page for magic links and email invitations.
  *
- * The Supabase client is configured with `detectSessionInUrl`, so by the time
- * this mounts the token in the URL has already been exchanged for a session.
- * All this page does is wait for that and route onward.
+ * The Supabase client is configured with `detectSessionInUrl`, but that
+ * exchange is asynchronous — see `useLinkSession`, which is what actually waits
+ * for it. All this page does is route onward once a session exists.
  */
-/**
- * The provider hands back its outcome in the URL fragment. Reading it during
- * render rather than in an effect means an error link never causes a render
- * with the spinner followed immediately by a state update.
- */
-function readHashParams(): URLSearchParams {
-  return new URLSearchParams(window.location.hash.replace(/^#/, ''))
-}
-
 export default function AuthCallbackPage() {
   const navigate = useNavigate()
-  const [hashParams] = useState(readHashParams)
-  const [sessionMissing, setSessionMissing] = useState(false)
-
-  const failed = hashParams.get('error') !== null || sessionMissing
+  const link = useLinkSession()
 
   useEffect(() => {
-    if (hashParams.get('error')) return
+    if (link.state !== 'ready') return
+    // An invited user arrives with no password set; send them to choose one.
+    navigate(link.isInvite ? '/auth/reset-password' : '/admin', { replace: true })
+  }, [link.state, link.isInvite, navigate])
 
-    let cancelled = false
-
-    supabase.auth.getSession().then(({ data }) => {
-      if (cancelled) return
-      if (data.session) {
-        // An invited user arrives with no password set; send them to choose one.
-        const isInvite = hashParams.get('type') === 'invite'
-        navigate(isInvite ? '/auth/reset-password' : '/admin', { replace: true })
-      } else {
-        setSessionMissing(true)
-      }
-    })
-
-    return () => {
-      cancelled = true
-    }
-  }, [navigate, hashParams])
-
-  if (failed) {
+  if (link.state === 'failed') {
     return (
       <div>
         <h1 className="text-2xl font-semibold tracking-tight text-[var(--app-text)]">
           That link didn't work
         </h1>
         <p className="mt-1.5 text-sm text-[var(--app-text-muted)]">
-          Sign-in links expire after an hour and can only be used once. Request a
+          Sign-in links expire after an hour and can only be used once. They also
+          have to be opened in the same browser that requested them. Request a
           fresh one and try again.
         </p>
+        {link.error && (
+          <p className="mt-3 rounded-lg bg-[var(--app-bg)] p-3 text-xs text-[var(--app-text-muted)]">
+            {link.error}
+          </p>
+        )}
         <Link to="/auth/login" className="mt-6 inline-block">
           <Button>Back to sign in</Button>
         </Link>

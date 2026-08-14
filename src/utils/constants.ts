@@ -61,6 +61,30 @@ export const APPLICANT_TRANSITIONS: Record<ApplicantStatus, ApplicantStatus[]> =
   archived: [],
 }
 
+/**
+ * The order the pipeline is read in, which is not the order the transition
+ * lists happen to be written in. Sorting by this keeps "Move this applicant
+ * to:" reading Pending → Screening → Interview → Hired → Rejected → Archived
+ * from every stage, rather than reshuffling the buttons under the user each
+ * time an applicant advances.
+ */
+export const APPLICANT_PIPELINE_ORDER: ApplicantStatus[] = [
+  'pending',
+  'screening',
+  'interview',
+  'hired',
+  'rejected',
+  'archived',
+]
+
+/** Sorts a set of statuses into pipeline order. */
+export function sortByPipeline(statuses: ApplicantStatus[]): ApplicantStatus[] {
+  return [...statuses].sort(
+    (a, b) =>
+      APPLICANT_PIPELINE_ORDER.indexOf(a) - APPLICANT_PIPELINE_ORDER.indexOf(b),
+  )
+}
+
 // Positions and ranks are NOT listed here. Migration 0013 made them
 // configuration rows, so they are loaded at runtime — see
 // `src/features/config/hooks/useConfig.ts`. Re-adding a hardcoded list here

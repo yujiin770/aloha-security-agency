@@ -219,7 +219,7 @@ export default function ApplyPage() {
   /* ---------------------------------------------------------------- success */
   if (reference) {
     return (
-      <div className="mx-auto w-full max-w-2xl px-4 py-16 sm:px-6">
+      <div className="mx-auto w-full max-w-2xl px-4 pt-28 pb-16 sm:px-6 sm:pt-32">
         <motion.div
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
@@ -291,7 +291,10 @@ export default function ApplyPage() {
   const errors = form.formState.errors
 
   return (
-    <div className="mx-auto w-full max-w-3xl px-4 py-12 sm:px-6">
+    // `PublicLayout`'s header is `fixed`, so it takes no space in the flow.
+    // Pages built on <PageHero> absorb that with their own top padding; this one
+    // is not, so it has to clear the header itself or the title sits under it.
+    <div className="mx-auto w-full max-w-3xl px-4 pt-28 pb-12 sm:px-6 sm:pt-32">
       <h1 className="text-2xl font-semibold tracking-tight text-[var(--app-text)] sm:text-3xl">
         Application form
       </h1>

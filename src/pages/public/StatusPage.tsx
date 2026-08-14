@@ -55,7 +55,8 @@ export default function StatusPage() {
   const meta = result ? applicantStatusMeta(result.status) : undefined
 
   return (
-    <div className="mx-auto w-full max-w-2xl px-4 py-16 sm:px-6">
+    // Clears the fixed header, as <PageHero> does for the pages built on it.
+    <div className="mx-auto w-full max-w-2xl px-4 pt-28 pb-16 sm:px-6 sm:pt-32">
       <div className="text-center">
         <div className="mx-auto inline-flex rounded-full bg-brand-50 p-3 text-brand-600 dark:bg-brand-900/25">
           <FileSearch className="h-6 w-6" aria-hidden="true" />

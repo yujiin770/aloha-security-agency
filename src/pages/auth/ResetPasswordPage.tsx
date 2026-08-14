@@ -1,4 +1,3 @@
-import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
@@ -7,8 +6,8 @@ import { zodResolver } from '@/lib/zodResolver'
 import { Button } from '@/components/ui/Button'
 import { Field, Input } from '@/components/ui/Field'
 import { useToast } from '@/components/ui/Toast'
-import { supabase } from '@/lib/supabase'
 import { updatePassword } from '@/features/auth/api/authApi'
+import { useLinkSession } from '@/features/auth/useLinkSession'
 import { errorMessage } from '@/lib/errors'
 
 /**
@@ -37,24 +36,16 @@ type FormValues = z.infer<typeof schema>
 export default function ResetPasswordPage() {
   const navigate = useNavigate()
   const toast = useToast()
-  const [ready, setReady] = useState<boolean | null>(null)
+  // Supabase exchanges the recovery link for a session on load
+  // (`detectSessionInUrl`), but not synchronously — see `useLinkSession`.
+  // Reading `getSession()` once on mount used to lose that race and told people
+  // with a perfectly good reset link that it had expired.
+  const link = useLinkSession()
 
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: { password: '', confirm: '' },
   })
-
-  // Supabase exchanges the recovery link for a session on load
-  // (`detectSessionInUrl`). Without one, there is nothing to update.
-  useEffect(() => {
-    let cancelled = false
-    supabase.auth.getSession().then(({ data }) => {
-      if (!cancelled) setReady(Boolean(data.session))
-    })
-    return () => {
-      cancelled = true
-    }
-  }, [])
 
   async function onSubmit(values: FormValues) {
     try {
@@ -66,20 +57,26 @@ export default function ResetPasswordPage() {
     }
   }
 
-  if (ready === null) {
+  if (link.state === 'pending') {
     return <p className="text-sm text-[var(--app-text-muted)]">Checking your link…</p>
   }
 
-  if (!ready) {
+  if (link.state === 'failed') {
     return (
       <div>
         <h1 className="text-2xl font-semibold tracking-tight text-[var(--app-text)]">
           This link is no longer valid
         </h1>
         <p className="mt-1.5 text-sm text-[var(--app-text-muted)]">
-          Reset links expire after an hour and can only be used once. Request a
+          Reset links expire after an hour and can only be used once. They also
+          have to be opened in the same browser that requested them. Request a
           new one to continue.
         </p>
+        {link.error && (
+          <p className="mt-3 rounded-lg bg-[var(--app-bg)] p-3 text-xs text-[var(--app-text-muted)]">
+            {link.error}
+          </p>
+        )}
         <Button className="mt-6" onClick={() => navigate('/auth/forgot-password')}>
           Request a new link
         </Button>
