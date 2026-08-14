@@ -1,12 +1,7 @@
 import { cn } from '@/utils/cn'
 import { APP_NAME } from '@/lib/env'
 
-/**
- * Brand mark.
- *
- * Sources `/logo.svg` from `public/`, so replacing that one file rebrands the
- * entire application — public site, sidebar, auth screens and favicon.
- */
+
 export function Logo({
   className,
   showWordmark = true,
