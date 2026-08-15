@@ -42,7 +42,7 @@ import { useOnlineStatus } from '@/hooks/useOnlineStatus'
 import { usePublicPositions } from '@/features/config/hooks/useConfig'
 import { CIVIL_STATUSES } from '@/utils/constants'
 import { formatRelative } from '@/utils/format'
-import { formatInches } from '@/utils/units'
+import { formatFeetInches } from '@/utils/units'
 import { cn } from '@/utils/cn'
 import type { DocumentType } from '@/types/database.types'
 
@@ -491,7 +491,7 @@ export default function ApplyPage() {
                   {selectedPosition.min_height_cm && (
                     <li>
                       Minimum height {selectedPosition.min_height_cm} cm (
-                      {formatInches(selectedPosition.min_height_cm)})
+                      {formatFeetInches(selectedPosition.min_height_cm)})
                     </li>
                   )}
                   {selectedPosition.requires_license && (
