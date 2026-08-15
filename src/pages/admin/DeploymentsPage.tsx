@@ -72,11 +72,12 @@ export default function DeploymentsPage() {
   const [reason, setReason] = useState('')
   const [targetBranch, setTargetBranch] = useState('')
 
-  const { data: branches = [] } = useQuery({
+  const branchQuery = useQuery({
     queryKey: queryKeys.branches.options(),
     queryFn: listBranchOptions,
     staleTime: 5 * 60_000,
   })
+  const branches = branchQuery.data ?? []
 
   // Refetched every time the dialog opens rather than served from the 30s
   // default staleTime: someone who has just hired an applicant in another tab
@@ -501,7 +502,18 @@ export default function DeploymentsPage() {
           )}
 
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Branch / post" required>
+            <Field
+              label="Branch / post"
+              required
+              error={branchQuery.isError ? errorMessage(branchQuery.error) : undefined}
+              hint={
+                branchQuery.isLoading
+                  ? 'Loading…'
+                  : branches.length === 0 && !branchQuery.isError
+                    ? 'No active facilities — add one on the Facilities page.'
+                    : undefined
+              }
+            >
               <Select
                 placeholder="Select branch…"
                 value={assignBranch}

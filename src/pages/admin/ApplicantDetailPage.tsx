@@ -54,6 +54,7 @@ import {
   humanize,
   maskId,
 } from '@/utils/format'
+import { formatFeetInches, formatPounds } from '@/utils/units'
 import type { ApplicantStatus } from '@/types/database.types'
 
 /**
@@ -234,7 +235,16 @@ export default function ApplicantDetailPage() {
 
   const a = applicant.data
   const statusMeta = applicantStatusMeta(a.status)
-  const allowedMoves = sortByPipeline(APPLICANT_TRANSITIONS[a.status])
+  // `hired` is deliberately not a plain status move. The database permits
+  // interview -> hired, so this card used to offer it as an ordinary button —
+  // and it worked, in the worst way: the applicant was marked Hired while no
+  // personnel record was ever created, because only
+  // promote_applicant_to_personnel() writes one. The roster stayed empty and
+  // the Assign Personnel dropdown had nothing to show. Onboarding goes through
+  // the Hire button and its dialog, which calls the RPC.
+  const allowedMoves = sortByPipeline(
+    APPLICANT_TRANSITIONS[a.status].filter((target) => target !== 'hired'),
+  )
 
   return (
     <>
@@ -294,6 +304,15 @@ export default function ApplicantDetailPage() {
                 )
               })}
             </div>
+
+            {a.status === 'interview' && (
+              <p className="mt-3 border-t border-[var(--app-border)] pt-3 text-xs text-[var(--app-text-muted)]">
+                To hire, use the <strong>Hire</strong> button above — it creates
+                the personnel record and employee number in the same
+                transaction, which is what puts this person on the roster and
+                makes them assignable to a post.
+              </p>
+            )}
           </Card>
         )}
       </Can>
@@ -309,8 +328,14 @@ export default function ApplicantDetailPage() {
                 ['Date of birth', `${formatDate(a.birth_date)} (${calculateAge(a.birth_date)} yrs)`],
                 ['Sex', humanize(a.sex)],
                 ['Civil status', humanize(a.civil_status)],
-                ['Height', a.height_cm ? `${a.height_cm} cm` : '—'],
-                ['Weight', a.weight_kg ? `${a.weight_kg} kg` : '—'],
+                [
+                  'Height',
+                  a.height_cm ? `${a.height_cm} cm (${formatFeetInches(a.height_cm)})` : '—',
+                ],
+                [
+                  'Weight',
+                  a.weight_kg ? `${a.weight_kg} kg (${formatPounds(a.weight_kg)})` : '—',
+                ],
                 [
                   'Address',
                   [a.address_line, a.barangay, a.city_municipality, a.province, a.region]

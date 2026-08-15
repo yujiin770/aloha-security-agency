@@ -22,6 +22,10 @@ import { Checkbox, Field, Input, Select, Textarea } from '@/components/ui/Field'
 import { useToast } from '@/components/ui/Toast'
 import { FileUpload } from '@/features/applicants/components/FileUpload'
 import {
+  HeightField,
+  WeightField,
+} from '@/features/applicants/components/MeasurementFields'
+import {
   applicationDefaults,
   applicationSchema,
   type ApplicationFormValues,
@@ -38,6 +42,7 @@ import { useOnlineStatus } from '@/hooks/useOnlineStatus'
 import { usePublicPositions } from '@/features/config/hooks/useConfig'
 import { CIVIL_STATUSES } from '@/utils/constants'
 import { formatRelative } from '@/utils/format'
+import { formatFeetInches } from '@/utils/units'
 import { cn } from '@/utils/cn'
 import type { DocumentType } from '@/types/database.types'
 
@@ -416,12 +421,8 @@ export default function ApplyPage() {
               </div>
 
               <div className="grid gap-4 sm:grid-cols-2">
-                <Field label="Height (cm)" error={errors.height_cm?.message}>
-                  <Input type="number" min={100} max={250} {...form.register('height_cm')} />
-                </Field>
-                <Field label="Weight (kg)" error={errors.weight_kg?.message}>
-                  <Input type="number" min={30} max={250} {...form.register('weight_kg')} />
-                </Field>
+                <HeightField form={form} error={errors.height_cm?.message} />
+                <WeightField form={form} error={errors.weight_kg?.message} />
               </div>
             </div>
           )}
@@ -488,7 +489,10 @@ export default function ApplyPage() {
                     </li>
                   )}
                   {selectedPosition.min_height_cm && (
-                    <li>Minimum height {selectedPosition.min_height_cm} cm</li>
+                    <li>
+                      Minimum height {selectedPosition.min_height_cm} cm (
+                      {formatFeetInches(selectedPosition.min_height_cm)})
+                    </li>
                   )}
                   {selectedPosition.requires_license && (
                     <li>A valid LESP/SOSIA security licence is required</li>

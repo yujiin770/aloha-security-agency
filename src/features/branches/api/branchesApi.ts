@@ -10,12 +10,17 @@ export interface BranchOption {
 }
 
 /**
- * Branch picker options for the public application form.
+ * Branch picker options.
  *
  * Branches are not readable by the anonymous role (RLS restricts SELECT to
- * staff), so this falls back to an empty list rather than erroring — the
- * "preferred branch" field is optional, and an applicant should never be
+ * staff), so a failure on the *public* application form is expected and
+ * swallowed — "preferred branch" is optional and an applicant must never be
  * blocked by it.
+ *
+ * For a signed-in user it is not expected, and swallowing it there was a bug:
+ * the Deployments and Applicants screens share this function, so any failure
+ * showed up as a branch dropdown that was simply, silently empty — no error, no
+ * retry, nothing to tell the user whether there were no branches or no answer.
  */
 export async function listBranchOptions(): Promise<BranchOption[]> {
   const { data, error } = await supabase
@@ -24,7 +29,12 @@ export async function listBranchOptions(): Promise<BranchOption[]> {
     .eq('is_active', true)
     .order('name')
 
-  if (error) return []
+  if (error) {
+    const { data: session } = await supabase.auth.getSession()
+    if (!session.session) return []
+    throw toAppError(error, 'Could not load branches.')
+  }
+
   return data ?? []
 }
 

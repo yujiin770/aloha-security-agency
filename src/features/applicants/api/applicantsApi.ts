@@ -397,6 +397,16 @@ export async function updateApplicantStatus(params: {
   /** When false, the applicant is not emailed about this change. */
   notify?: boolean
 }): Promise<{ applicant: ApplicantRow; notification: NotifyOutcome }> {
+  // Hiring is not a status change, even though the database will accept one.
+  // A bare update to 'hired' marks the applicant hired without creating the
+  // personnel row that makes them real — no employee number, absent from the
+  // roster, unassignable to a post. `hireApplicant` is the only correct path.
+  if (params.status === 'hired') {
+    throw new AppError(
+      'Use the Hire action to onboard an applicant — it creates the personnel record as well as changing the status.',
+    )
+  }
+
   const patch: Partial<ApplicantRow> = { status: params.status }
 
   if (params.status === 'rejected') {
@@ -467,6 +477,14 @@ export async function bulkUpdateStatus(
   rejectionReason?: string,
   options: { notify?: boolean } = {},
 ): Promise<{ updated: number; sent: number; failed: number }> {
+  // Same reasoning as updateApplicantStatus: hiring in bulk would produce a
+  // batch of applicants marked hired with no personnel records behind them.
+  if (status === 'hired') {
+    throw new AppError(
+      'Applicants must be onboarded one at a time through the Hire action, which creates each personnel record.',
+    )
+  }
+
   const patch: Partial<ApplicantRow> = { status }
   if (status === 'rejected') {
     patch.rejection_reason = rejectionReason ?? 'Not specified'
