@@ -54,7 +54,7 @@ import {
   humanize,
   maskId,
 } from '@/utils/format'
-import { formatFeetInches, formatPounds } from '@/utils/units'
+import { formatInches, formatPounds } from '@/utils/units'
 import type { ApplicantStatus } from '@/types/database.types'
 
 /**
@@ -330,7 +330,7 @@ export default function ApplicantDetailPage() {
                 ['Civil status', humanize(a.civil_status)],
                 [
                   'Height',
-                  a.height_cm ? `${a.height_cm} cm (${formatFeetInches(a.height_cm)})` : '—',
+                  a.height_cm ? `${a.height_cm} cm (${formatInches(a.height_cm)})` : '—',
                 ],
                 [
                   'Weight',

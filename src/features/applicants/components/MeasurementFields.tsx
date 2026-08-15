@@ -1,155 +1,168 @@
 import { useState } from 'react'
 import { useWatch, type UseFormReturn } from 'react-hook-form'
-import { Field, Input } from '@/components/ui/Field'
+import { Field, Input, Select } from '@/components/ui/Field'
 import {
-  cmToFeetInches,
-  feetInchesToCm,
+  cmToInches,
+  inchesToCm,
   kgToLb,
   lbToKg,
-  type FeetInches,
+  sameUnit,
 } from '@/utils/units'
 import type { ApplicationFormValues } from '../schemas/applicationSchema'
 
 /**
- * Height and weight, enterable in either unit.
+ * Height and weight, entered in whichever unit the applicant thinks in.
  *
- * Only the metric value is part of the form — it is what the database stores
- * and what `toApplicantInsert` sends. The imperial boxes are local state that
- * reads from and writes to it, so an applicant who thinks in feet and pounds
- * never has to convert anything by hand.
+ * One number box and a unit picker. Only the metric value is part of the form —
+ * it is what the database stores (`numeric(5, 2)`, CHECK 100–250 cm and 30–250
+ * kg) and what `toApplicantInsert` sends. The box holds a display value in the
+ * selected unit and converts on the way in and out, so switching from kg to lb
+ * re-labels *and* re-values the number already typed rather than reinterpreting
+ * it as a different weight.
  *
- * Keeping the two in step is the whole problem here. Both directions have to
- * work, which is a cycle, and the naive fix — an effect that recomputes the
- * imperial pair whenever the metric value changes — fights the user as they
- * type: clearing the inches box sets cm, which sets inches straight back to 0.
+ * Keeping the display in step with the form value is the awkward part, because
+ * it is a cycle: typing sets the metric value, and a changed metric value sets
+ * the display. The naive fix — an effect that recomputes the display whenever
+ * the metric value changes — fights the user as they type, snapping a
+ * half-entered number back.
  *
  * So the sync happens during render, React's documented way to adjust state
- * when an external value changes, and it is guarded by a comparison rather than
- * a flag: if the incoming metric value is exactly what the current imperial
- * pair converts to, this component is the one that just produced it and the
- * boxes are left precisely as typed. Anything else — the metric box, a restored
- * draft — is an outside change and wins.
+ * when an external value changes, guarded by a comparison rather than a flag:
+ * if the incoming metric value is exactly what the current display converts to,
+ * this component is the one that just produced it and the box is left precisely
+ * as typed. Anything else — a restored draft, a programmatic reset — is an
+ * outside change and wins.
  */
 
-interface Props {
+type MetricField = 'height_cm' | 'weight_kg'
+
+interface UnitSpec {
+  value: string
+  label: string
+  /** Bounds in this unit, mirroring the CHECK constraints in migration 0004. */
+  min: number
+  max: number
+  toMetric: (display: string) => string
+  fromMetric: (metric: string) => string
+}
+
+/**
+ * Typed as a non-empty tuple so the first entry is the guaranteed default —
+ * `noUncheckedIndexedAccess` would otherwise make every `units[0]` optional and
+ * the fallbacks below unprovable.
+ */
+type UnitList = [UnitSpec, ...UnitSpec[]]
+
+const HEIGHT_UNITS: UnitList = [
+  { value: 'cm', label: 'cm', min: 100, max: 250, toMetric: sameUnit, fromMetric: sameUnit },
+  { value: 'in', label: 'in', min: 39, max: 99, toMetric: inchesToCm, fromMetric: cmToInches },
+]
+
+const WEIGHT_UNITS: UnitList = [
+  { value: 'kg', label: 'kg', min: 30, max: 250, toMetric: sameUnit, fromMetric: sameUnit },
+  { value: 'lb', label: 'lb', min: 66, max: 551, toMetric: lbToKg, fromMetric: kgToLb },
+]
+
+interface UnitFieldProps {
+  label: string
+  name: MetricField
+  units: UnitList
   form: UseFormReturn<ApplicationFormValues>
   error?: string
 }
 
-export function HeightField({ form, error }: Props) {
-  const cm = useWatch({ control: form.control, name: 'height_cm' }) ?? ''
+function UnitField({ label, name, units, form, error }: UnitFieldProps) {
+  const metric = useWatch({ control: form.control, name }) ?? ''
 
-  const [imperial, setImperial] = useState<FeetInches>(() => cmToFeetInches(cm))
-  const [lastCm, setLastCm] = useState(cm)
+  const [unit, setUnit] = useState(units[0].value)
+  const [display, setDisplay] = useState(() => units[0].fromMetric(metric))
+  const [lastMetric, setLastMetric] = useState(metric)
 
-  if (cm !== lastCm) {
-    setLastCm(cm)
-    if (cm !== feetInchesToCm(imperial)) setImperial(cmToFeetInches(cm))
+  const spec = units.find((u) => u.value === unit) ?? units[0]
+
+  if (metric !== lastMetric) {
+    setLastMetric(metric)
+    if (metric !== spec.toMetric(display)) setDisplay(spec.fromMetric(metric))
   }
 
-  function setFromImperial(next: FeetInches) {
-    setImperial(next)
-    form.setValue('height_cm', feetInchesToCm(next), {
+  function commit(nextDisplay: string, nextSpec: UnitSpec) {
+    form.setValue(name, nextSpec.toMetric(nextDisplay), {
       shouldDirty: true,
       shouldValidate: true,
     })
   }
 
+  function handleDisplayChange(next: string) {
+    setDisplay(next)
+    commit(next, spec)
+  }
+
+  function handleUnitChange(nextValue: string) {
+    const nextSpec = units.find((u) => u.value === nextValue) ?? units[0]
+    setUnit(nextValue)
+    // Re-express what is already there in the new unit. The stored metric value
+    // is unchanged — 70 kg is still 70 kg when the box starts reading 154.3 lb.
+    setDisplay(nextSpec.fromMetric(metric))
+  }
+
   return (
     <Field
-      label="Height"
+      label={label}
       error={error}
-      hint="Enter centimetres or feet and inches — the other updates itself."
+      hint={`Entered in ${spec.label}. Change the unit and the value converts.`}
     >
-      <div className="grid grid-cols-[1fr_auto_1fr_1fr] items-center gap-2">
+      {/*
+        Widths come from the grid tracks, not from utilities on the controls.
+        `Input` and `Select` both carry `w-full` in their own base classes, and
+        `cn` is a plain joiner with no conflict resolution (see utils/cn.ts), so
+        a `w-24` passed down here would not override it — both classes ship and
+        `w-full` wins on stylesheet order, stretching the picker across the row.
+        `minmax(0, 1fr)` keeps the number box from being pushed wider than its
+        track by the default `min-width: auto` on grid items.
+      */}
+      <div className="grid grid-cols-[minmax(0,1fr)_6rem] gap-2">
         <Input
           type="number"
-          min={100}
-          max={250}
+          min={spec.min}
+          max={spec.max}
           step="0.1"
           inputMode="decimal"
-          aria-label="Height in centimetres"
-          placeholder="cm"
-          {...form.register('height_cm')}
+          placeholder={spec.label}
+          aria-label={`${label} in ${spec.label}`}
+          value={display}
+          onChange={(e) => handleDisplayChange(e.target.value)}
         />
-        <span className="text-xs text-[var(--app-text-subtle)]">cm</span>
-
-        <Input
-          type="number"
-          min={3}
-          max={8}
-          inputMode="numeric"
-          aria-label="Height, feet"
-          placeholder="ft"
-          value={imperial.feet}
-          onChange={(e) => setFromImperial({ ...imperial, feet: e.target.value })}
-        />
-        <Input
-          type="number"
-          min={0}
-          max={11}
-          inputMode="numeric"
-          aria-label="Height, inches"
-          placeholder="in"
-          value={imperial.inches}
-          onChange={(e) => setFromImperial({ ...imperial, inches: e.target.value })}
+        <Select
+          aria-label={`${label} unit`}
+          value={unit}
+          onChange={(e) => handleUnitChange(e.target.value)}
+          options={units.map((u) => ({ value: u.value, label: u.label }))}
         />
       </div>
     </Field>
   )
 }
 
-export function WeightField({ form, error }: Props) {
-  const kg = useWatch({ control: form.control, name: 'weight_kg' }) ?? ''
-
-  const [pounds, setPounds] = useState(() => kgToLb(kg))
-  const [lastKg, setLastKg] = useState(kg)
-
-  if (kg !== lastKg) {
-    setLastKg(kg)
-    if (kg !== lbToKg(pounds)) setPounds(kgToLb(kg))
-  }
-
-  function setFromPounds(next: string) {
-    setPounds(next)
-    form.setValue('weight_kg', lbToKg(next), {
-      shouldDirty: true,
-      shouldValidate: true,
-    })
-  }
-
+export function HeightField({
+  form,
+  error,
+}: {
+  form: UseFormReturn<ApplicationFormValues>
+  error?: string
+}) {
   return (
-    <Field
-      label="Weight"
-      error={error}
-      hint="Enter kilograms or pounds — the other updates itself."
-    >
-      <div className="grid grid-cols-[1fr_auto_1fr_auto] items-center gap-2">
-        <Input
-          type="number"
-          min={30}
-          max={250}
-          step="0.1"
-          inputMode="decimal"
-          aria-label="Weight in kilograms"
-          placeholder="kg"
-          {...form.register('weight_kg')}
-        />
-        <span className="text-xs text-[var(--app-text-subtle)]">kg</span>
+    <UnitField label="Height" name="height_cm" units={HEIGHT_UNITS} form={form} error={error} />
+  )
+}
 
-        <Input
-          type="number"
-          min={66}
-          max={551}
-          step="0.1"
-          inputMode="decimal"
-          aria-label="Weight in pounds"
-          placeholder="lb"
-          value={pounds}
-          onChange={(e) => setFromPounds(e.target.value)}
-        />
-        <span className="text-xs text-[var(--app-text-subtle)]">lb</span>
-      </div>
-    </Field>
+export function WeightField({
+  form,
+  error,
+}: {
+  form: UseFormReturn<ApplicationFormValues>
+  error?: string
+}) {
+  return (
+    <UnitField label="Weight" name="weight_kg" units={WEIGHT_UNITS} form={form} error={error} />
   )
 }
