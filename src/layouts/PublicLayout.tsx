@@ -8,6 +8,7 @@ import { useScrolled } from '@/hooks/useScrolled'
 import { usePublicSettings } from '@/features/settings/hooks/useSettings'
 import { cn } from '@/utils/cn'
 import { APP_NAME, SUPPORT_EMAIL } from '@/lib/env'
+import { BackToTop } from '@/components/BackToTop' 
 
 const NAV = [
   { to: '/', label: 'Home', end: true },
@@ -38,7 +39,7 @@ export function PublicLayout() {
   // else the header must be solid from the first frame or it sits invisibly on
   // white.
   const overHero = location.pathname === '/'
-  const solid = scrolled || !overHero || menuOpen
+  const solid = true || scrolled || !overHero
 
   return (
     <div className="marketing flex min-h-dvh flex-col bg-white">
@@ -62,6 +63,7 @@ export function PublicLayout() {
       </main>
 
       <SiteFooter />
+      <BackToTop />
     </div>
   )
 }

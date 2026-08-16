@@ -46,6 +46,7 @@ interface UnitPart {
   min: number
   max: number
   step: string
+  placeholder: string 
 }
 
 interface UnitSpec {
@@ -69,7 +70,7 @@ const HEIGHT_UNITS: UnitList = [
   {
     value: 'cm',
     label: 'cm',
-    parts: [{ label: 'cm', min: 100, max: 250, step: '0.1' }],
+    parts: [{ label: 'cm', min: 100, max: 250, step: '0.1', placeholder: '170' }],
     toMetric: (parts) => at(parts, 0).trim(),
     fromMetric: (metric) => [metric],
   },
@@ -77,8 +78,8 @@ const HEIGHT_UNITS: UnitList = [
     value: 'ftin',
     label: 'ft / in',
     parts: [
-      { label: 'ft', min: 3, max: 8, step: '1' },
-      { label: 'in', min: 0, max: 11, step: '1' },
+      { label: 'ft', min: 3, max: 8, step: '1', placeholder: '5' },
+      { label: 'in', min: 0, max: 11, step: '1', placeholder: '7' },
     ],
     toMetric: (parts) => feetInchesToCm(at(parts, 0), at(parts, 1)),
     fromMetric: (metric) => [...cmToFeetInches(metric)],
@@ -89,19 +90,18 @@ const WEIGHT_UNITS: UnitList = [
   {
     value: 'kg',
     label: 'kg',
-    parts: [{ label: 'kg', min: 30, max: 250, step: '0.1' }],
+    parts: [{ label: 'kg', min: 30, max: 250, step: '0.1', placeholder: '70' }],
     toMetric: (parts) => at(parts, 0).trim(),
     fromMetric: (metric) => [metric],
   },
   {
     value: 'lb',
     label: 'lb',
-    parts: [{ label: 'lb', min: 66, max: 551, step: '0.1' }],
+    parts: [{ label: 'lb', min: 66, max: 551, step: '0.1', placeholder: '154' }],
     toMetric: (parts) => lbToKg(at(parts, 0)),
     fromMetric: (metric) => [kgToLb(metric)],
   },
 ]
-
 /**
  * Widths come from grid tracks, never from utilities on the controls: `Input`
  * and `Select` carry `w-full` in their own base classes and `cn` is a plain
@@ -172,7 +172,7 @@ function UnitField({ label, name, units, form, error }: UnitFieldProps) {
             max={part.max}
             step={part.step}
             inputMode="decimal"
-            placeholder={part.label}
+            placeholder={part.placeholder}
             aria-label={`${label} in ${part.label}`}
             value={at(display, index)}
             onChange={(e) => handlePartChange(index, e.target.value)}

@@ -1,272 +1,92 @@
-import { useRef } from 'react'
-import { motion, useReducedMotion, useScroll, useTransform } from 'framer-motion'
-import { ArrowRight, CheckCircle2, MousePointer2, Search } from 'lucide-react'
+import { motion } from 'framer-motion'
 import { ButtonLink } from '@/components/ui/Button'
-import { Container, SmartImage } from '@/components/marketing'
-import { TRUST_BADGES } from '@/features/marketing/content'
-import { usePublicPositions } from '@/features/config/hooks/useConfig'
 import { useMediaSlot } from '@/features/cms/hooks/useCms'
 
-/**
- * Landing hero.
- *
- * Full-bleed photograph behind a dark gradient, with the headline and CTAs over
- * it. The background image sits on a slow parallax as the page scrolls; the
- * effect is subtle on purpose — enough to give the section depth, not enough to
- * fight the reader.
- *
- * The stat row uses real data where it can: the open-position count comes from
- * the `positions` table, so it can never advertise roles that are closed.
- */
 export function HeroSection() {
-  const ref = useRef<HTMLElement>(null)
-  const reduced = useReducedMotion()
-  const { data: positions = [] } = usePublicPositions()
   const heroImage = useMediaSlot('hero')
 
-  const { scrollYProgress } = useScroll({
-    target: ref,
-    offset: ['start start', 'end start'],
-  })
-  const imageY = useTransform(scrollYProgress, [0, 1], ['0%', '18%'])
-  const contentOpacity = useTransform(scrollYProgress, [0, 0.8], [1, 0])
-
   return (
-    <section
-      ref={ref}
-      className="relative isolate flex min-h-dvh items-center overflow-hidden bg-ink pt-28 pb-20 sm:pt-32"
-    >
-      {/* Background ---------------------------------------------------- */}
-      <motion.div
-        style={reduced ? undefined : { y: imageY }}
-        className="absolute inset-0 -z-10 h-[118%]"
-        aria-hidden="true"
-      >
-        <SmartImage
-          src={heroImage.src}
-          alt=""
-          width={1920}
-          height={1080}
-          priority
-          rounded="none"
-          wrapperClassName="h-full w-full"
-          className="h-full w-full object-cover"
-        />
-        {/* Two overlays: a vertical gradient for text contrast, and a warm
-            brand wash so the photograph reads as ours rather than stock. */}
-        <div className="absolute inset-0 bg-gradient-to-r from-ink via-ink/85 to-ink/40" />
-        <div className="absolute inset-0 bg-gradient-to-t from-ink via-transparent to-ink/70" />
-        <div className="bg-grid-faint absolute inset-0 opacity-60" />
-      </motion.div>
+    <section className="relative flex min-h-dvh w-full flex-col overflow-hidden bg-white lg:flex-row">
 
+      {/* BACKGROUND DIAGONAL LAYER */}
+      {/* Desktop: Right-side red diagonal */}
       <div
-        className="absolute top-0 right-0 -z-10 h-[38rem] w-[38rem] translate-x-1/3 -translate-y-1/3 rounded-full bg-brand-500/12 blur-3xl"
-        aria-hidden="true"
+        className="absolute inset-0 z-0 bg-brand-500 hidden lg:block"
+        style={{ clipPath: 'polygon(58% 0, 100% 0, 100% 100%, 45% 100%)' }}
+      />
+      {/* Mobile: Bottom-side red area starting with diagonal cut */}
+      <div
+        className="absolute inset-0 z-0 bg-brand-500 lg:hidden"
+        style={{ clipPath: 'polygon(0 45%, 100% 35%, 100% 100%, 0 100%)' }}
       />
 
-      <Container>
-        <motion.div
-          style={reduced ? undefined : { opacity: contentOpacity }}
-          className="grid items-center gap-16 lg:grid-cols-12"
-        >
-          {/* Copy -------------------------------------------------------- */}
-          <div className="lg:col-span-7">
-            <motion.p
-              initial={reduced ? false : { opacity: 0, y: 16 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5 }}
-              className="inline-flex items-center gap-2.5 rounded-full border border-white/15 bg-white/5 px-4 py-1.5 text-xs font-semibold tracking-[0.14em] text-white/80 uppercase backdrop-blur-sm"
-            >
-              <span className="relative flex h-2 w-2" aria-hidden="true">
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-brand-500 opacity-75" />
-                <span className="relative inline-flex h-2 w-2 rounded-full bg-brand-500" />
-              </span>
-              Now hiring nationwide
-            </motion.p>
+      {/* CONTENT WRAPPER */}
+      <div className="relative z-10 flex flex-1 flex-col lg:flex-row">
 
-            <motion.h1
-              initial={reduced ? false : { opacity: 0, y: 22 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, delay: 0.08 }}
-              className="text-display mt-7 text-[2.75rem] text-white text-balance sm:text-6xl lg:text-[4.25rem]"
-            >
-              Security you can
-              <span className="relative ml-3 inline-block text-brand-500">
-                account for
-                <svg
-                  viewBox="0 0 300 12"
-                  className="absolute -bottom-2 left-0 h-2.5 w-full text-brand-500/50"
-                  fill="none"
-                  aria-hidden="true"
-                  preserveAspectRatio="none"
-                >
-                  <path
-                    d="M2 9C60 3 140 2 298 6"
-                    stroke="currentColor"
-                    strokeWidth="3"
-                    strokeLinecap="round"
-                  />
-                </svg>
-              </span>
-            </motion.h1>
+        {/* LOGO SIDE (Top on Mobile | Right on Desktop) */}
+        <div className="flex flex-1 items-center justify-center pt-20 pb-10 order-1 lg:order-2 lg:py-0">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 1, delay: 0.2 }}
+            className="relative flex aspect-square w-[75%] max-w-[320px] items-center justify-center lg:w-[75%] lg:max-w-[550px] lg:ml-20"
+          >
+            {/* Subtle depth glow */}
+            <div className="absolute inset-0 rounded-full bg-black/5 blur-3xl" />
 
-            <motion.p
-              initial={reduced ? false : { opacity: 0, y: 22 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, delay: 0.16 }}
-              className="mt-8 max-w-xl text-lg leading-relaxed text-neutral-300 text-pretty"
-            >
-              Aloha Security Agency recruits, trains and deploys licensed
-              security personnel across the Philippines — with every clearance
-              verified and every deployment on record.
-            </motion.p>
+            <img
+              src={heroImage.src}
+              alt={heroImage.alt}
+              className="relative h-full w-full object-contain drop-shadow-[0_30px_50px_rgba(0,0,0,0.2)] lg:drop-shadow-[0_45px_70px_rgba(0,0,0,0.4)]"
+            />
+          </motion.div>
+        </div>
 
-            <motion.div
-              initial={reduced ? false : { opacity: 0, y: 22 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, delay: 0.24 }}
-              className="mt-10 flex flex-wrap gap-3"
-            >
+        {/* TEXT SIDE (Bottom on Mobile | Left on Desktop) */}
+        <div className="flex flex-1 flex-col justify-center px-6 pt-10 pb-16 text-center items-center order-2 lg:order-1 lg:text-left lg:items-start lg:pt-0 lg:pb-0 lg:pl-20 xl:pl-32">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.8, ease: "easeOut" }}
+            className="max-w-2xl flex flex-col items-center lg:items-start"
+          >
+            {/* Headline: White on Mobile | Black/Red on Desktop */}
+            <h1 className="text-4xl font-black leading-tight tracking-tight text-white lg:text-ink sm:text-6xl lg:text-7xl xl:text-8xl">
+              Your Safety, <br />
+              <span className="text-white lg:text-brand-500">Our</span> Priority
+            </h1>
+
+            {/* Divider Rule: White on Mobile | Red on Desktop */}
+            <div className="mt-4 h-1 w-16 bg-white lg:mt-8 lg:h-2 lg:w-24 lg:bg-brand-500 rounded-full" />
+
+            {/* Description: White on Mobile | Gray on Desktop */}
+            <p className="mt-6 max-w-sm text-[15px] font-medium leading-relaxed text-white lg:text-neutral-600 lg:mt-10 lg:text-lg sm:text-xl lg:max-w-lg">
+              We provide professional, reliable, and well-trained personnel to safeguard your people, property, and business in Zamboanga City since 2002.
+            </p>
+
+            {/* Buttons: Pill-shaped (rounded-full) on Mobile | Rectangular (rounded-md) on Desktop */}
+            <div className="mt-10 flex flex-col gap-3 w-full max-w-[200px] lg:flex-row lg:max-w-none lg:w-auto lg:gap-5">
+              {/* JOIN OUR TEAM - Desktop Adjusted */}
               <ButtonLink
                 to="/apply"
-                size="xl"
-                rightIcon={<ArrowRight className="h-4 w-4" aria-hidden="true" />}
+                className="w-full rounded-full lg:rounded-md bg-ink lg:w-[280px] lg:py-5 text-xs font-bold uppercase tracking-[0.2em] text-white transition-all hover:bg-neutral-800 shadow-xl"
               >
-                Apply now
+                Join our team
               </ButtonLink>
+
+              {/* CHECK STATUS - Desktop Adjusted */}
               <ButtonLink
-                to="/contact"
-                size="xl"
-                variant="inverted"
-                leftIcon={<Search className="h-4 w-4" aria-hidden="true" />}
+                to="/status"
+                variant="secondary"
+                className="w-full rounded-full lg:rounded-md border-2 border-white lg:border-ink bg-transparent lg:w-[280px] lg:py-5 text-xs font-bold uppercase tracking-[0.2em] text-white lg:text-ink transition-all hover:bg-white lg:hover:bg-ink lg:hover:text-white"
               >
-                Request security services
+                Check status
               </ButtonLink>
-            </motion.div>
-
-            <motion.ul
-              initial={reduced ? false : { opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ duration: 0.6, delay: 0.36 }}
-              className="mt-12 flex flex-wrap gap-x-7 gap-y-3"
-            >
-              {TRUST_BADGES.map((badge) => (
-                <li
-                  key={badge}
-                  className="flex items-center gap-2 text-sm font-medium text-neutral-400"
-                >
-                  <CheckCircle2
-                    className="h-4 w-4 shrink-0 text-laurel-500"
-                    aria-hidden="true"
-                  />
-                  {badge}
-                </li>
-              ))}
-            </motion.ul>
-          </div>
-
-          {/* Floating stat cards ---------------------------------------- */}
-          <div className="lg:col-span-5">
-            <div className="grid gap-4 sm:grid-cols-2 lg:ml-auto lg:max-w-sm lg:grid-cols-1">
-              <FloatCard
-                delay={0.3}
-                float={0}
-                value={
-                  positions.length > 0 ? String(positions.length) : '—'
-                }
-                label="Open positions"
-                detail="Accepting applications now"
-              />
-              <FloatCard
-                delay={0.4}
-                float={1}
-                value="24/7"
-                label="Command centre"
-                detail="Monitored around the clock"
-              />
-              <FloatCard
-                delay={0.5}
-                float={2}
-                value="100%"
-                label="Cleared personnel"
-                detail="NBI verified before deployment"
-                highlight
-              />
             </div>
-          </div>
-        </motion.div>
-      </Container>
+          </motion.div>
+        </div>
 
-      {/* Scroll cue ---------------------------------------------------- */}
-      <motion.a
-        href="#about"
-        initial={reduced ? false : { opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ delay: 1, duration: 0.6 }}
-        className="absolute inset-x-0 bottom-7 mx-auto flex w-fit flex-col items-center gap-2 text-white/50 transition-colors hover:text-white"
-      >
-        <span className="text-[10px] font-semibold tracking-[0.2em] uppercase">
-          Scroll
-        </span>
-        <motion.span
-          animate={reduced ? undefined : { y: [0, 7, 0] }}
-          transition={{ duration: 1.8, repeat: Infinity, ease: 'easeInOut' }}
-          aria-hidden="true"
-        >
-          <MousePointer2 className="h-4 w-4 rotate-180" />
-        </motion.span>
-      </motion.a>
+      </div>
     </section>
-  )
-}
-
-function FloatCard({
-  value,
-  label,
-  detail,
-  delay,
-  float,
-  highlight = false,
-}: {
-  value: string
-  label: string
-  detail: string
-  delay: number
-  float: number
-  highlight?: boolean
-}) {
-  const reduced = useReducedMotion()
-
-  return (
-    <motion.div
-      initial={reduced ? false : { opacity: 0, y: 26 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.6, delay }}
-      className="rounded-[var(--radius-xl)] border border-white/12 bg-white/[0.06] p-5 backdrop-blur-md"
-    >
-      <motion.div
-        // Each card drifts on its own phase, so the group breathes rather than
-        // moving as one block.
-        animate={reduced ? undefined : { y: [0, -7, 0] }}
-        transition={{
-          duration: 4.5 + float,
-          repeat: Infinity,
-          ease: 'easeInOut',
-          delay: float * 0.5,
-        }}
-      >
-        <p
-          className={
-            highlight
-              ? 'text-3xl font-extrabold tracking-tight text-brand-500'
-              : 'text-3xl font-extrabold tracking-tight text-white'
-          }
-        >
-          {value}
-        </p>
-        <p className="mt-1 text-sm font-semibold text-white">{label}</p>
-        <p className="mt-0.5 text-xs text-neutral-400">{detail}</p>
-      </motion.div>
-    </motion.div>
   )
 }

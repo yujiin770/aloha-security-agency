@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
 import { Award, ArrowUpRight, CalendarDays, Quote, Star, Building2  } from 'lucide-react'
+import { cn } from '@/utils/cn' // Import for alternating layout logic
 import {
   MarketingCard,
   Placeholder,
@@ -20,103 +21,122 @@ import {
   useNewsPosts,
   useTestimonials,
 } from '@/features/cms/hooks/useCms'
-import { formatDate } from '@/utils/format'
-import { initials } from '@/utils/format'
-
-/**
- * Social-proof sections, driven by the CMS.
- *
- * Each renders real content once an administrator publishes some, and a
- * "content needed" panel until then — pointing at the admin page rather than a
- * source file, because filling these in is an editor's job, not a developer's.
- *
- * Nothing here fabricates a testimonial, a client relationship or a credential.
- * The empty state is honest; invented filler would not be.
- */
+import { formatDate, initials } from '@/utils/format'
 
 const ADMIN_HINT = 'Add these in the admin console under Website Content.'
 
 /* -------------------------------------------------------------------------- */
-/* Client Showcase (Modern Highlighted Card Style)                            */
+/* Client Showcase (Alternating Big Image Style)                             */
 /* -------------------------------------------------------------------------- */
 
 export function TrustBarSection() {
   const { data: clients = [], isLoading } = useClients(true)
 
   return (
-    <Section tone="muted" size="lg" className="border-y border-[var(--app-border)] relative overflow-hidden">
-      {/* Dynamic Background Decoration */}
-      <div className="absolute top-0 left-0 w-full h-full opacity-[0.03] pointer-events-none" 
-           style={{ backgroundImage: `radial-gradient(circle at 2px 2px, var(--color-brand-500) 1px, transparent 0)`, backgroundSize: '40px 40px' }} />
-
-      <Container className="relative z-10">
-        <Reveal className="text-center mb-16">
-          <p className="text-xs font-extrabold tracking-[0.3em] text-brand-600 uppercase mb-4">
-            Our Network of Trust
+    <Section tone="muted" size="lg" className="overflow-hidden">
+      <Container>
+        <Reveal className="text-center mb-24">
+          <p className="text-xs font-bold tracking-[0.4em] text-brand-600 uppercase mb-4">
+            Our Network
           </p>
-          <h2 className="text-4xl md:text-5xl font-bold text-ink tracking-tight">
+          <h2 className="text-4xl md:text-5xl font-extrabold text-ink tracking-tight">
             Our Esteemed Partners
           </h2>
-          <div className="h-1 w-20 bg-brand-500 mx-auto mt-6 rounded-full" />
-          <p className="mt-8 text-[var(--app-text-muted)] max-w-2xl mx-auto text-lg leading-relaxed text-pretty">
-            Partnering with the Philippines' most respected institutions to deliver 
-            uncompromising security and operational excellence.
+          <p className="mt-6 text-[var(--app-text-muted)] max-w-2xl mx-auto text-lg leading-relaxed">
+            We are proud to secure some of the most prominent facilities and 
+            institutions across the Philippines.
           </p>
         </Reveal>
 
-        {/* The Card Grid */}
         {isLoading ? (
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-6">
-            {Array.from({ length: 5 }).map((_, index) => (
-              <Skeleton key={index} className="h-56 rounded-[2rem]" />
+          <div className="space-y-20">
+            {Array.from({ length: 3 }).map((_, index) => (
+              <Skeleton key={index} className="h-[400px] rounded-3xl" />
             ))}
           </div>
         ) : (
-          <RevealGroup 
-            as="ul" 
-            className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-6"
-          >
-            {clients.map((client) => (
-              <RevealItem as="li" key={client.id} className="h-full">
-                <div className="group h-full flex flex-col p-5 bg-white border border-neutral-100 rounded-[2rem] shadow-[0_8px_30px_rgb(0,0,0,0.04)] transition-all duration-500 hover:shadow-[0_20px_50px_rgba(226,56,40,0.1)] hover:-translate-y-2 hover:border-brand-100">
-                  
-                  {/* Modern Image "Pod" */}
-                  <div className="relative aspect-square w-full flex items-center justify-center mb-5 bg-neutral-50 rounded-[1.5rem] overflow-hidden border border-neutral-50 group-hover:bg-white transition-colors duration-500">
-                    {/* Subtle Inset Shadow for depth */}
-                    <div className="absolute inset-0 shadow-[inset_0_2px_10px_rgba(0,0,0,0.02)]" />
-                    
-                    {client.logo_path ? (
-                      <img
-                        src={mediaUrl(client.logo_path) ?? ''}
-                        alt={client.name}
-                        loading="lazy"
-                        className="relative z-10 max-h-[60%] max-w-[70%] object-contain drop-shadow-sm group-hover:scale-110 transition-transform duration-700 ease-out"
-                        /* Note: grayscale and low-opacity removed so it's already "highlighted" */
-                      />
-                    ) : (
-                      <Building2 className="w-8 h-8 text-neutral-200" />
-                    )}
-                  </div>
+          <div className="space-y-32 lg:space-y-48">
+            {clients.map((client, index) => {
+              const isEven = index % 2 === 0
+              return (
+                <div 
+                  key={client.id} 
+                  className="grid lg:grid-cols-2 gap-12 lg:gap-24 items-center"
+                >
+                  {/* Image Side */}
+                  <Reveal 
+                    direction={isEven ? 'right' : 'left'} 
+                    className={cn(isEven ? 'lg:order-1' : 'lg:order-2')}
+                  >
+                    <div className="relative group">
+                      <div className="absolute -inset-4 bg-brand-500/5 rounded-[2.5rem] scale-95 group-hover:scale-100 transition-transform duration-700 -z-10" />
+                      <div className="aspect-[16/10] overflow-hidden rounded-[2rem] shadow-[var(--shadow-lift)] border border-[var(--app-border)] bg-white">
+                        {client.logo_path ? (
+                          <img
+                            src={mediaUrl(client.logo_path) ?? ''}
+                            alt={client.name}
+                            className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
+                          />
+                        ) : (
+                          <div className="flex h-full w-full items-center justify-center bg-white">
+                            <Building2 className="w-20 h-20 text-neutral-200" />
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </Reveal>
 
-                  {/* Label Typography */}
-                  <div className="px-2 pb-2 mt-auto">
-                    <h3 className="text-center text-[11px] font-black text-ink uppercase tracking-[0.15em] leading-tight opacity-80 group-hover:text-brand-600 group-hover:opacity-100 transition-all">
-                      {client.name}
-                    </h3>
-                    <div className="w-0 h-0.5 bg-brand-500 mx-auto mt-2 group-hover:w-8 transition-all duration-500 rounded-full" />
-                  </div>
-                  
+                  {/* Text Side */}
+                  <Reveal 
+                    direction={isEven ? 'left' : 'right'} 
+                    className={cn("space-y-6", isEven ? 'lg:order-2' : 'lg:order-1')}
+                  >
+                    <div className="space-y-2">
+                      <span className="font-mono text-sm font-bold text-brand-600 tracking-tighter">
+                        PARTNER {String(index + 1).padStart(2, '0')}
+                      </span>
+                      <h3 className="text-3xl lg:text-4xl font-bold text-ink">
+                        {client.name}
+                      </h3>
+                      {client.industry && (
+                        <p className="text-xs font-black uppercase tracking-[0.2em] text-neutral-400">
+                          {client.industry}
+                        </p>
+                      )}
+                    </div>
+
+                    <p className="text-[17px] font-medium leading-relaxed text-[var(--app-text-muted)] text-pretty">
+                      Providing comprehensive security management and professional 
+                      officer deployment for {client.name}. Our partnership ensures 
+                      operational continuity and safety standards aligned with 
+                      national regulations.
+                    </p>
+
+                    {client.website_url && (
+                      <div className="pt-4">
+                        <a
+                          href={client.website_url}
+                          target="_blank"
+                          rel="noreferrer noopener"
+                          className="inline-flex items-center gap-2 text-sm font-bold text-ink group/link"
+                        >
+                          Visit Official Website
+                          <ArrowUpRight className="w-4 h-4 transition-transform group-hover/link:translate-x-1 group-hover/link:-translate-y-1" />
+                        </a>
+                      </div>
+                    )}
+                  </Reveal>
                 </div>
-              </RevealItem>
-            ))}
-          </RevealGroup>
+              )
+            })}
+          </div>
         )}
 
         {!isLoading && clients.length === 0 && (
            <div className="mt-12">
               <Placeholder 
                 label="Partner Roster Empty" 
-                hint="Use the Admin Console > Website Content > Clients to showcase your partners." 
+                hint="Add clients in the Admin Console to replace this placeholder." 
               />
            </div>
         )}
@@ -124,6 +144,7 @@ export function TrustBarSection() {
     </Section>
   )
 }
+
 /* -------------------------------------------------------------------------- */
 /* Testimonials                                                               */
 /* -------------------------------------------------------------------------- */
@@ -379,4 +400,3 @@ export function NewsSection() {
     </Section>
   )
 }
-
