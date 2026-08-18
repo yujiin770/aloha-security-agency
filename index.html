@@ -3,18 +3,29 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <link rel="icon" type="image/svg+xml" href="/logo.png" />
+    
+    <!-- Icons -->
+    <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/site.webmanifest" />
+
     <meta
       name="description"
       content="Aloha Security Agency — Recruitment and Deployment Management System. Apply for security guard, lady guard, VIP escort, CCTV operator and driver positions."
     />
-    <meta name="theme-color" content="#111111" />
+
+    <!-- Brand Colors for Mobile Browsers -->
+    <meta name="theme-color" content="#e23828" />
+    <meta name="apple-mobile-web-app-title" content="Aloha Security" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    
     <meta name="color-scheme" content="light dark" />
+
     <!--
       Content Security Policy.
       `connect-src` must include your Supabase project origin; the wildcard below
       covers *.supabase.co REST/Auth/Storage plus the Realtime websocket.
-      Prefer serving this as a response header at the CDN/host layer in production.
     -->
     <meta
       http-equiv="Content-Security-Policy"
@@ -29,6 +40,7 @@
                script-src 'self';
                connect-src 'self' https://*.supabase.co wss://*.supabase.co;"
     />
+
     <title>Aloha Security Agency — Recruitment &amp; Deployment</title>
   </head>
   <body>
