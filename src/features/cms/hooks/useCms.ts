@@ -71,7 +71,7 @@ export function useSiteMedia() {
  * never been touched by an editor still look finished.
  */
 export function useMediaSlot(key: string) {
-  const { data } = useSiteMedia()
+  const { data, isLoading } = useSiteMedia()
   const slot = data?.find((item) => item.key === key)
 
   return {
@@ -79,6 +79,7 @@ export function useMediaSlot(key: string) {
     alt: slot?.alt_text ?? '',
     width: slot?.width ?? 1200,
     height: slot?.height ?? 800,
+    isLoading,
   }
 }
 

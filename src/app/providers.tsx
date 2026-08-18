@@ -4,10 +4,10 @@ import { queryClient } from '@/lib/queryClient'
 import { AuthProvider } from '@/contexts/AuthContext'
 import { ThemeProvider } from '@/contexts/ThemeContext'
 import { ToastProvider } from '@/components/ui/Toast'
-import { LoadingState } from '@/components/ui/Feedback'
 import { OfflineBanner } from '@/components/OfflineBanner'
 import { ErrorBoundary } from './ErrorBoundary'
 import { EnvGate } from './EnvGate'
+import { SplashScreen } from '@/components/ui/Feedback' // Change this import
 
 /**
  * Provider stack, outermost first.
@@ -30,7 +30,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
             <AuthProvider>
               <ToastProvider>
                 <OfflineBanner />
-                <Suspense fallback={<LoadingState label="Loading…" />}>
+                <Suspense fallback={<SplashScreen />}>
                   {children}
                 </Suspense>
               </ToastProvider>

@@ -2,8 +2,54 @@ import type { ReactNode } from 'react'
 import { AlertTriangle, Inbox, Loader2 } from 'lucide-react'
 import { cn } from '@/utils/cn'
 import { Button } from './Button'
+import { motion } from 'framer-motion'
+import { Logo } from '@/components/Logo'
 
 /** Loading, empty and error states — the three screens every list needs. */
+
+// Add this component to the file:
+export function SplashScreen() {
+  return (
+    <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-white dark:bg-ink">
+      <div className="relative flex flex-col items-center gap-8">
+        {/* Logo Animation */}
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5 }}
+        >
+          <Logo size="lg" />
+        </motion.div>
+
+        {/* Loading Bar Container */}
+        <div className="relative h-1 w-48 overflow-hidden rounded-full bg-neutral-100 dark:bg-neutral-800">
+          {/* Moving Progress Bar */}
+          <motion.div
+            className="absolute inset-y-0 left-0 bg-brand-500"
+            initial={{ width: "0%", x: "-100%" }}
+            animate={{ 
+              width: ["20%", "40%", "20%"],
+              x: ["-100%", "400%", "400%"] 
+            }}
+            transition={{ 
+              duration: 2, 
+              repeat: Infinity, 
+              ease: "easeInOut" 
+            }}
+          />
+        </div>
+
+        <motion.p 
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.3 }}
+          className="text-xs font-medium tracking-[0.2em] text-neutral-400 uppercase"
+        >Loading....
+        </motion.p>
+      </div>
+    </div>
+  )
+}
 
 export function Skeleton({ className }: { className?: string }) {
   return (
