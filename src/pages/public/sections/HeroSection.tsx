@@ -9,6 +9,9 @@ export function HeroSection() {
   const heroImage = useMediaSlot('hero')
   const [imageLoaded, setImageLoaded] = useState(false)
 
+  // Start animations after the 3s Splash Screen + 0.2s fade-out buffer
+  const START_DELAY = 1.5
+
   // Show skeleton if the database is still fetching OR the image file is still downloading
   const showSkeleton = heroImage.isLoading || !imageLoaded
 
@@ -61,7 +64,7 @@ export function HeroSection() {
                 opacity: imageLoaded ? 1 : 0, 
                 scale: imageLoaded ? 1 : 0.9 
               }}
-              transition={{ duration: 1, delay: 0.2 }}
+              transition={{ duration: 1, delay: START_DELAY }}
               className="relative h-full w-full flex items-center justify-center"
             >
               <div className="absolute inset-0 rounded-full bg-black/5 blur-3xl" />
@@ -83,7 +86,7 @@ export function HeroSection() {
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8, ease: 'easeOut' }}
+            transition={{ duration: 0.8, delay: START_DELAY + 0.3, ease: 'easeOut' }}
             className="max-w-2xl flex flex-col items-center lg:items-start"
           >
             <h1 className="text-4xl font-black leading-tight tracking-tight text-white lg:text-ink sm:text-6xl lg:text-5xl xl:text-6xl">
