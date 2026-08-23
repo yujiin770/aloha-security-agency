@@ -412,14 +412,15 @@ export default function RolesPage() {
             ))}
           </div>
         ) : (
-          <div className="scrollbar-slim overflow-x-auto">
-            <table className="table-sticky w-full border-collapse text-sm">
+          <div className="scrollbar-slim overflow-x-auto rounded-lg border border-[var(--app-border)]">
+            <table className="w-full border-collapse text-sm">
               <caption className="sr-only">Pages each role can open</caption>
               <thead>
                 <tr>
                   <th
                     scope="col"
-                    className="sticky left-0 z-20 min-w-[18rem] bg-[var(--app-surface)] px-4 py-3 text-left text-xs font-semibold text-[var(--app-text-muted)] uppercase"
+                
+                    className="sticky left-0 z-20 w-36 min-w-[9rem] sm:w-72 sm:min-w-[18rem] border-r border-[var(--app-border)] bg-[var(--app-surface)] px-4 py-3 text-left text-xs font-semibold text-[var(--app-text-muted)] uppercase after:absolute after:inset-y-0 after:right-0 after:w-4 after:translate-x-full after:bg-gradient-to-r after:from-black/5 after:to-transparent after:content-['']"
                   >
                     Page
                   </th>
@@ -427,9 +428,10 @@ export default function RolesPage() {
                     <th
                       key={role.key}
                       scope="col"
-                      className="px-3 py-3 text-center text-xs font-semibold text-[var(--app-text-muted)]"
+                     
+                      className="min-w-[7rem] px-3 py-3 text-center text-xs font-semibold text-[var(--app-text-muted)]"
                     >
-                      <span className="block max-w-[7rem] truncate" title={role.label}>
+                      <span className="block truncate" title={role.label}>
                         {role.label}
                       </span>
                     </th>
@@ -442,24 +444,22 @@ export default function RolesPage() {
                   <tr key={page.key} className="border-t border-[var(--app-border)]">
                     <th
                       scope="row"
-                      className="sticky left-0 z-10 bg-[var(--app-surface)] px-4 py-2.5 text-left font-normal"
+               
+                      className="sticky left-0 z-10 border-r border-[var(--app-border)] bg-[var(--app-surface)] px-4 py-3 text-left font-normal"
                     >
-                      <span className="block text-sm font-medium text-[var(--app-text)]">
+                      <span className="block truncate text-sm font-medium text-[var(--app-text)]">
                         {page.label}
                       </span>
-                      <span className="block text-xs text-[var(--app-text-subtle)]">
+                      {/* Hiding description on very small screens to keep rows from getting too tall */}
+                      <span className="hidden sm:block text-xs text-[var(--app-text-subtle)]">
                         {page.description}
                       </span>
                     </th>
 
                     {roleList.map((role) => {
-                      const granted = (rolePermissions.data?.[role.key] ?? []).includes(
-                        page.key,
-                      )
+                      const granted = (rolePermissions.data?.[role.key] ?? []).includes(page.key)
                       const cell = `${role.key}:${page.key}`
                       const busy = pendingCells.has(cell)
-                      // Dashboard and Settings stay on for everyone: a user with
-                      // no landing page has nowhere to go after signing in.
                       const locked = page.alwaysGranted
 
                       return (
@@ -469,17 +469,11 @@ export default function RolesPage() {
                             checked={granted}
                             disabled={!canEdit || busy || locked}
                             onChange={() => void toggle(role.key, page.key, granted)}
-                            aria-label={`${granted ? 'Revoke' : 'Grant'} ${page.label} for ${role.label}`}
-                            title={
-                              locked
-                                ? 'Every role needs this page'
-                                : `${granted ? 'Revoke' : 'Grant'} ${page.label}`
-                            }
                             className={cn(
                               'h-4 w-4 rounded border-[var(--app-border)] text-brand-500',
                               'focus:ring-2 focus:ring-brand-500 focus:ring-offset-1',
                               busy && 'opacity-50',
-                              (locked || !canEdit) && 'cursor-not-allowed',
+                              (locked || !canEdit) && 'cursor-not-allowed opacity-40',
                             )}
                           />
                         </td>
