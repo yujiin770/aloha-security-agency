@@ -17,11 +17,6 @@ import { cn } from '@/utils/cn'
 
 /**
  * Turns Supabase's auth errors into something a person can act on.
- *
- * "Invalid login credentials" is the one that matters: it is returned both for
- * an unknown address and for a wrong password, deliberately, so that the form
- * cannot be used to discover which staff emails exist. The wording here has to
- * preserve that ambiguity while still telling the user what to do.
  */
 function signInMessage(error: unknown): string {
   const raw = errorMessage(error).toLowerCase()
@@ -44,7 +39,6 @@ function signInMessage(error: unknown): string {
 function magicLinkMessage(error: unknown): string {
   const raw = errorMessage(error).toLowerCase()
 
-  // `shouldCreateUser: false` — an address with no staff account gets this.
   if (raw.includes('signups not allowed') || raw.includes('otp_disabled')) {
     return 'No staff account exists for that address. Ask an administrator to invite you first.'
   }
@@ -75,8 +69,6 @@ export default function LoginPage() {
   const [linkSent, setLinkSent] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
 
-  // Read once on mount, before the effect below clears it — a deliberate sign-out
-  // sends the user to the Dashboard rather than back to the page they left.
   const [afterSignOut] = useState(wasDeliberateSignOut)
   useEffect(() => {
     clearDeliberateSignOut()
@@ -103,9 +95,6 @@ export default function LoginPage() {
       await signInWithPassword(values.email, values.password)
       navigate(from, { replace: true })
     } catch (error) {
-      // One banner rather than a message under each field: the failure is about
-      // the pair, not about either value on its own, and Supabase deliberately
-      // will not say which half was wrong.
       setFormError(signInMessage(error))
       passwordForm.setFocus('password')
     }
@@ -167,10 +156,14 @@ export default function LoginPage() {
       {formError && (
         <div
           role="alert"
-          className="mt-6 flex items-start gap-2.5 rounded-lg border border-danger/30 bg-danger-soft p-3.5"
+          /*  Added responsive dark mode background and border */
+          className="mt-6 flex items-start gap-2.5 rounded-lg border border-danger/30 bg-danger-soft dark:bg-danger/10 dark:border-danger/20 p-3.5"
         >
           <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-danger" aria-hidden="true" />
-          <p className="text-sm text-[var(--app-text)]">{formError}</p>
+          {/*  Changed text color from global var to text-danger for contrast */}
+          <p className="text-sm font-medium text-danger dark:text-red-400">
+            {formError}
+          </p>
         </div>
       )}
 

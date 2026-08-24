@@ -129,7 +129,7 @@ export default function ApplicantsPage() {
     },
     {
       key: 'branch',
-      header: 'Preferred branch',
+      header: 'Preferred facility', // Changed from "Preferred branch"
       secondary: true,
       render: (row) => (
         <span className="text-sm text-[var(--app-text-muted)]">
@@ -181,7 +181,7 @@ export default function ApplicantsPage() {
         { key: 'status', header: 'Status' },
         { key: 'age', header: 'Age' },
         { key: 'years_experience', header: 'Experience (yrs)' },
-        { key: 'preferred_branch_name', header: 'Preferred branch' },
+        { key: 'preferred_branch_name', header: 'Preferred facility' }, 
         { key: 'created_at', header: 'Submitted' },
       ],
     )
@@ -268,7 +268,7 @@ export default function ApplicantsPage() {
               options={positions.map((p) => ({ value: p.id, label: p.name }))}
             />
           </Field>
-          <Field label="Preferred branch">
+          <Field label="Preferred facility"> 
             <Select
               placeholder="All facilities"
               value={branchId}

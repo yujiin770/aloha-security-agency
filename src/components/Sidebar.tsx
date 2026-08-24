@@ -149,7 +149,7 @@ const SECTIONS: { heading: string; items: NavItem[] }[] = [
     items: [
       {
         to: '/admin/users',
-        label: 'Users & Roles',
+        label: 'Users',
         icon: Users,
         permission: 'pages.users',
       },
@@ -176,11 +176,17 @@ export function Sidebar({
   mobileOpen: boolean
   onClose: () => void
 }) {
-  const { hasPermission, user } = useAuth()
+  const { hasPermission, user, isAdmin } = useAuth() // isAdmin here
 
   const sections = SECTIONS.map((section) => ({
     ...section,
-    items: section.items.filter((item) => hasPermission(item.permission)),
+    items: section.items.filter((item) => {
+   
+      if (item.to === '/admin/settings') {
+        return isAdmin && hasPermission(item.permission)
+      }
+      return hasPermission(item.permission)
+    }),
   })).filter((section) => section.items.length > 0)
 
   return (

@@ -391,7 +391,7 @@ export default function BranchesPage() {
 
                   <div className="mt-4">
                     <div className="flex items-baseline justify-between text-sm">
-                      <span className="text-[var(--app-text-muted)]">Staffing</span>
+                      <span className="text-[var(--app-text-muted)]">Staff</span>
                       <span className="tabular-nums text-[var(--app-text)]">
                         {stats?.deployed_count ?? 0}/{branch.required_headcount}
                         <span className="ml-1.5 text-xs text-[var(--app-text-subtle)]">

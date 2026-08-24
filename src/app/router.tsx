@@ -3,7 +3,7 @@ import { createBrowserRouter, Navigate } from 'react-router-dom'
 import { PublicLayout } from '@/layouts/PublicLayout'
 import { AuthLayout } from '@/layouts/AuthLayout'
 import { DashboardLayout } from '@/layouts/DashboardLayout'
-import { PageGuard, ProtectedRoute } from './guards'
+import { PageGuard, ProtectedRoute, RoleGuard } from './guards'
 
 /**
  * Route table.
@@ -188,7 +188,14 @@ export const router = createBrowserRouter([
               </PageGuard>
             ),
           },
-          { path: 'settings', element: <SettingsPage /> },
+          {
+            path: 'settings',
+            element: (
+              <RoleGuard allow={['owner', 'admin', 'system_administrator']}>
+                <SettingsPage />
+              </RoleGuard>
+            ),
+          },
           { path: 'settings/profile', element: <ProfilePage /> },
           // Data Configuration is a layout route: the hub owns the header and
           // section tabs, each section keeps its own URL. It previously had no

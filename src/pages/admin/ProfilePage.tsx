@@ -23,7 +23,7 @@ const schema = z.object({
 type FormValues = z.infer<typeof schema>
 
 export default function ProfilePage() {
-  const { user, refresh } = useAuth()
+  const { user, refresh, isAdmin } = useAuth()
   const toast = useToast()
 
   const form = useForm<FormValues>({
@@ -61,10 +61,17 @@ export default function ProfilePage() {
 
   if (!user) return null
 
+  /**
+   * - Admins see "Settings" to allow navigating back.
+   */
+  const breadcrumbs = isAdmin 
+    ? [{ label: 'Settings', to: '/admin/settings' }] 
+    : undefined
+
   return (
     <>
       <PageHeader
-        breadcrumbs={[{ label: 'Settings', to: '/admin/settings' }, { label: 'My profile' }]}
+        breadcrumbs={breadcrumbs}
         title="My profile"
         description="Your account details and how you sign in."
       />
