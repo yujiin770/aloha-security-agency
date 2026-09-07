@@ -653,6 +653,17 @@ export type ApplicationReceipt = {
   reference_no: string
 }
 
+/**
+ * One row from `check_email_eligibility` (0023). `state` is 'available',
+ * 'hired', or the existing application's status; `message` is the sentence to
+ * show the applicant and is null only when they may proceed.
+ */
+export type EmailEligibility = {
+  eligible: boolean
+  state: string
+  message: string | null
+}
+
 export type DashboardStats = {
   applicants: {
     total: number
@@ -777,6 +788,10 @@ export type Database = {
       submit_application: {
         Args: { p_payload: Json; p_submission_id?: string | null }
         Returns: ApplicationReceipt[]
+      }
+      check_email_eligibility: {
+        Args: { p_email: string }
+        Returns: EmailEligibility[]
       }
       get_dashboard_stats: { Args: Record<string, never>; Returns: DashboardStats }
       promote_applicant_to_personnel: {

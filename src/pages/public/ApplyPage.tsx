@@ -31,6 +31,7 @@ import {
   type ApplicationFormValues,
 } from '@/features/applicants/schemas/applicationSchema'
 import {
+  checkEmailEligibility,
   submitApplication,
   uploadApplicantDocument,
 } from '@/features/applicants/api/applicantsApi'
@@ -107,6 +108,7 @@ export default function ApplyPage() {
     { kind: 'network' | 'other'; message: string } | null
   >(null)
   const [draftDismissed, setDraftDismissed] = useState(false)
+  const [checkingEmail, setCheckingEmail] = useState(false)
 
   // One idempotency key per filled-in form, so a retry after an ambiguous
   // timeout cannot create a second applicant record. State rather than a ref:
@@ -155,7 +157,40 @@ export default function ApplyPage() {
   async function next() {
     const fields = STEP_FIELDS[step] ?? []
     const valid = fields.length === 0 || (await form.trigger(fields))
-    if (valid) setStep((s) => Math.min(s + 1, STEPS.length - 1))
+    if (!valid) return
+
+    // One application per email address (0023). The submit RPC has the last
+    // word, but it only gets to speak once the whole form is filled in — so the
+    // same question is asked here, while the address is still on screen.
+    if (step === 0 && !(await emailMayApply())) return
+
+    setStep((s) => Math.min(s + 1, STEPS.length - 1))
+  }
+
+  /**
+   * False only on a definite "already applied". A failed check — offline, RPC
+   * error — lets the applicant carry on: the submit still enforces the rule,
+   * and being unable to reach the server is not a reason to refuse someone.
+   */
+  async function emailMayApply() {
+    const email = form.getValues('email')
+    if (!email?.trim()) return true
+
+    setCheckingEmail(true)
+    try {
+      const result = await checkEmailEligibility(email)
+      if (result.eligible) return true
+
+      form.setError('email', {
+        type: 'server',
+        message: result.message ?? 'This email address cannot be used to apply.',
+      })
+      return false
+    } catch {
+      return true
+    } finally {
+      setCheckingEmail(false)
+    }
   }
 
   async function onSubmit(values: ApplicationFormValues) {
@@ -751,7 +786,11 @@ export default function ApplyPage() {
           </Button>
 
           {step < STEPS.length - 1 ? (
-            <Button onClick={next} rightIcon={<ArrowRight className="h-4 w-4" />}>
+            <Button
+              onClick={next}
+              isLoading={checkingEmail}
+              rightIcon={<ArrowRight className="h-4 w-4" />}
+            >
               Continue
             </Button>
           ) : (

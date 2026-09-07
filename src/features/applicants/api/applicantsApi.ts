@@ -10,6 +10,7 @@ import type {
   ApplicationReceipt,
   ApplicationStatusResult,
   DocumentType,
+  EmailEligibility,
   Json,
   PersonnelRow,
 } from '@/types/database.types'
@@ -24,6 +25,32 @@ import { buildStatusEmail } from '../utils/emailTemplates'
 /* -------------------------------------------------------------------------- */
 
 const SUBMIT_TIMEOUT_MS = 30_000
+
+/**
+ * Asks whether an email address may still be used to apply (migration 0023).
+ *
+ * The rule is one application per address, and the submit RPC enforces it — but
+ * only at the very end, after the whole form has been filled in. This is the
+ * same question asked on the first step, so the applicant is told before they
+ * spend ten minutes typing.
+ *
+ * Advisory only: it can go stale between the check and the submit, and a
+ * network failure here must not stop someone applying. Callers treat anything
+ * other than a definite "no" as permission to continue.
+ */
+export async function checkEmailEligibility(
+  email: string,
+): Promise<EmailEligibility> {
+  const { data, error } = await supabase.rpc('check_email_eligibility', {
+    p_email: email,
+  })
+
+  if (error) throw toAppError(error, 'Could not check that email address.')
+
+  return (
+    data?.[0] ?? { eligible: true, state: 'available', message: null }
+  )
+}
 
 /**
  * Submits a public application.
