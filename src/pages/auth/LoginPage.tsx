@@ -100,13 +100,19 @@ export default function LoginPage() {
     }
   }
 
+  // 1. Add a dedicated loading state for the magic link button
+  const [isSendingMagicLink, setIsSendingMagicLink] = useState(false)
+
   async function onMagicSubmit(values: MagicLinkForm) {
     setFormError(null)
+    setIsSendingMagicLink(true) // Turn spinner ON
     try {
       await signInWithMagicLink(values.email)
       setLinkSent(true)
     } catch (error) {
       setFormError(magicLinkMessage(error))
+    } finally {
+      setIsSendingMagicLink(false) // Turn spinner OFF
     }
   }
 
@@ -156,11 +162,9 @@ export default function LoginPage() {
       {formError && (
         <div
           role="alert"
-          /*  Added responsive dark mode background and border */
           className="mt-6 flex items-start gap-2.5 rounded-lg border border-danger/30 bg-danger-soft dark:bg-danger/10 dark:border-danger/20 p-3.5"
         >
           <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-danger" aria-hidden="true" />
-          {/*  Changed text color from global var to text-danger for contrast */}
           <p className="text-sm font-medium text-danger dark:text-red-400">
             {formError}
           </p>
@@ -248,16 +252,18 @@ export default function LoginPage() {
             />
           </Field>
 
+          {/* 2. Uses the manual local state tracker */}
           <Button
             type="submit"
             fullWidth
             size="lg"
-            isLoading={magicForm.formState.isSubmitting}
+            isLoading={isSendingMagicLink}
           >
-            Send sign-in link
+            Send sign in link
           </Button>
         </form>
       )}
+
     </div>
   )
 }
