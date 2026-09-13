@@ -100,19 +100,19 @@ export default function LoginPage() {
     }
   }
 
-  // 1. Add a dedicated loading state for the magic link button
+ 
   const [isSendingMagicLink, setIsSendingMagicLink] = useState(false)
 
   async function onMagicSubmit(values: MagicLinkForm) {
     setFormError(null)
-    setIsSendingMagicLink(true) // Turn spinner ON
+    setIsSendingMagicLink(true) 
     try {
       await signInWithMagicLink(values.email)
       setLinkSent(true)
     } catch (error) {
       setFormError(magicLinkMessage(error))
     } finally {
-      setIsSendingMagicLink(false) // Turn spinner OFF
+      setIsSendingMagicLink(false) 
     }
   }
 
@@ -252,7 +252,7 @@ export default function LoginPage() {
             />
           </Field>
 
-          {/* 2. Uses the manual local state tracker */}
+          {/* manual local state tracker */}
           <Button
             type="submit"
             fullWidth
