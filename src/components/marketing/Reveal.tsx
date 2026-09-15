@@ -72,17 +72,16 @@ export function Reveal({
       className={className}
       initial="hidden"
       whileInView="visible"
-      // `once` matters: re-animating on every scroll past is the difference
-      // between "polished" and "distracting".
-      viewport={{ once: true, amount: 0.2, margin: '0px 0px -80px 0px' }}
+      // amount: 0.05 ensures elements trigger immediately if they are already in view on back-navigation
+      viewport={{ once: true, amount: 0.05, margin: '0px 0px -50px 0px' }}
       variants={variantsFor(direction, scale)}
-      transition={{ delay }}
+      // If the user navigated from another page, skip the heavy delay to make it instant
+      transition={{ delay: window.performance.navigation.type === 1 ? delay : Math.min(delay, 0.1) }}
     >
       {children}
     </MotionTag>
   )
 }
-
 /**
  * Staggers its children automatically. Use for card grids so each item does not
  * need its own hand-tuned delay.

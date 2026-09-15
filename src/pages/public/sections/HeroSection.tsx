@@ -5,14 +5,18 @@ import { useMediaSlot } from '@/features/cms/hooks/useCms'
 import { cn } from '@/utils/cn'
 
 export function HeroSection() {
-  // We assume useMediaSlot returns { src, alt, isLoading }
   const heroImage = useMediaSlot('hero')
   const [imageLoaded, setImageLoaded] = useState(false)
+  const [hasSplashed] = useState(() => {
+    const played = sessionStorage.getItem('aloha_splashed')
+    if (!played) {
+      sessionStorage.setItem('aloha_splashed', 'true')
+      return false
+    }
+    return true
+  })
 
-  // Start animations after the 3s Splash Screen + 0.2s fade-out buffer
-  const START_DELAY = 1.5
-
-  // Show skeleton if the database is still fetching OR the image file is still downloading
+  const START_DELAY = hasSplashed ? 0.1 : 1.5
   const showSkeleton = heroImage.isLoading || !imageLoaded
 
   return (

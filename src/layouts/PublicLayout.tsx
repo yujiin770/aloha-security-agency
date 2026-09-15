@@ -9,6 +9,7 @@ import { usePublicSettings } from '@/features/settings/hooks/useSettings'
 import { cn } from '@/utils/cn'
 import { APP_NAME, SUPPORT_EMAIL } from '@/lib/env'
 import { BackToTop } from '@/components/BackToTop' 
+import { ScrollToTop } from '@/components/ui/ScrollToTop'
 
 const NAV = [
   { to: '/', label: 'Home', end: true },
@@ -43,6 +44,8 @@ export function PublicLayout() {
 
   return (
     <div className="marketing flex min-h-dvh flex-col bg-white">
+      <ScrollToTop /> {/* <--- Place it right at the top inside the layout */}
+
       <a href="#main" className="skip-link">
         Skip to main content
       </a>
@@ -67,7 +70,6 @@ export function PublicLayout() {
     </div>
   )
 }
-
 /* -------------------------------------------------------------------------- */
 /* Header                                                                      */
 /* -------------------------------------------------------------------------- */
