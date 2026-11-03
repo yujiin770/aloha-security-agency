@@ -1,7 +1,18 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowRightLeft, CircleStop, Download, Plus, Search } from 'lucide-react'
+import {
+  ArrowRightLeft,
+  CalendarClock,
+  CircleStop,
+  Download,
+  MapPinned,
+  Plus,
+  Search,
+  ShieldAlert,
+  UserCheck,
+} from 'lucide-react'
+import { cn } from '@/utils/cn'
 import { PageHeader } from '@/components/PageHeader'
 import { DataTable, type Column, type SortState } from '@/components/DataTable'
 import { Button } from '@/components/ui/Button'
@@ -9,6 +20,8 @@ import { Badge } from '@/components/ui/Badge'
 import { Field, Input, Select, Textarea } from '@/components/ui/Field'
 import { Modal } from '@/components/ui/Modal'
 import { useToast } from '@/components/ui/Toast'
+import { StatCard } from '@/components/ui/Feedback'
+import { fetchDashboardStats } from '@/features/reports/api/reportsApi'
 import { Can } from '@/app/guards'
 import { queryKeys } from '@/lib/queryKeys'
 import { errorMessage } from '@/lib/errors'
@@ -279,8 +292,10 @@ export default function DeploymentsPage() {
                   setEffectiveDate(today())
                 }}
                 aria-label={`Transfer ${row.personnel_name}`}
+                title="Transfer to another post"
               >
                 <ArrowRightLeft className="h-3.5 w-3.5" aria-hidden="true" />
+                <span className="hidden xl:inline" aria-hidden="true">Transfer</span>
               </Button>
               <Button
                 size="sm"
@@ -290,9 +305,12 @@ export default function DeploymentsPage() {
                   setEndTarget(row)
                   setEffectiveDate(today())
                 }}
-                aria-label={`End deployment for ${row.personnel_name}`}
+                aria-label={`End duty for ${row.personnel_name}`}
+                title="End duty"
+                className="text-danger hover:bg-danger-soft hover:text-danger"
               >
-                <CircleStop className="h-3.5 w-3.5 text-danger" aria-hidden="true" />
+                <CircleStop className="h-3.5 w-3.5" aria-hidden="true" />
+                <span className="hidden xl:inline" aria-hidden="true">End duty</span>
               </Button>
             </div>
           </Can>
@@ -327,6 +345,12 @@ export default function DeploymentsPage() {
     toast.success('Export ready', `${rows.length} row(s) downloaded.`)
   }
 
+  const stats = useQuery({
+    queryKey: queryKeys.reports.dashboard(),
+    queryFn: fetchDashboardStats,
+  })
+  const d = stats.data
+
   return (
     <>
       <PageHeader
@@ -353,6 +377,73 @@ export default function DeploymentsPage() {
         }
       />
 
+      {!stats.isError && (
+        <section aria-label="Deployment summary" className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <StatCard
+            icon={MapPinned}
+            label="Active deployments"
+            value={d?.deployments.active ?? 0}
+            caption={`${d?.deployments.new_this_month ?? 0} started this month`}
+            isLoading={stats.isLoading}
+          />
+          <StatCard
+            icon={CalendarClock}
+            tone={(d?.deployments.ending_soon ?? 0) > 0 ? 'warning' : 'neutral'}
+            label="Ending soon"
+            value={d?.deployments.ending_soon ?? 0}
+            caption="Within the next 14 days"
+            isLoading={stats.isLoading}
+          />
+          <StatCard
+            icon={UserCheck}
+            tone="success"
+            label="Available personnel"
+            value={Math.max(0, (d?.personnel.active ?? 0) - (d?.personnel.deployed ?? 0))}
+            caption="Active and not on a post"
+            to="/admin/personnel"
+            isLoading={stats.isLoading}
+          />
+          <StatCard
+            icon={ShieldAlert}
+            tone={(d?.branches.vacancies ?? 0) > 0 ? 'danger' : 'neutral'}
+            label="Open posts"
+            value={d?.branches.vacancies ?? 0}
+            caption={`Across ${d?.branches.active ?? 0} active facilities`}
+            to="/admin/facilities"
+            isLoading={stats.isLoading}
+          />
+        </section>
+      )}
+
+      {/* Quick status filter; the full list stays in the dropdown below. */}
+      <div className="mb-3 flex flex-wrap gap-1 rounded-lg border border-[var(--app-border)] bg-[var(--app-surface)] p-1 sm:inline-flex" role="group" aria-label="Deployment status">
+        {(
+          [
+            ['active', 'Active'],
+            ['ended', 'Ended'],
+            ['', 'All'],
+          ] as [DeploymentStatus | '', string][]
+        ).map(([value, label]) => (
+          <button
+            key={label}
+            type="button"
+            aria-pressed={status === value}
+            onClick={() => {
+              setStatus(value)
+              setPage(1)
+            }}
+            className={cn(
+              'rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
+              status === value
+                ? 'bg-brand-500 text-white'
+                : 'text-[var(--app-text-muted)] hover:bg-[var(--app-bg)] hover:text-[var(--app-text)]',
+            )}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
       <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <div className="relative sm:col-span-2 lg:col-span-1">
           <Search
@@ -368,7 +459,7 @@ export default function DeploymentsPage() {
             }}
             placeholder="Search personnel or post…"
             aria-label="Search deployments"
-            className="h-10 w-full rounded-lg border border-[var(--app-border)] bg-[var(--app-surface)] pl-9 text-sm text-[var(--app-text)] placeholder:text-[var(--app-text-subtle)]"
+            className="h-10 w-full rounded-lg border border-[var(--app-border)] bg-[var(--app-surface)] pr-3 pl-9 text-sm text-[var(--app-text)] shadow-[0_1px_1px_rgb(15_23_42/0.03)] transition-[border-color,box-shadow] placeholder:text-[var(--app-text-subtle)] focus:border-brand-500 focus:ring-[3px] focus:ring-brand-500/15 focus:outline-none"
           />
         </div>
 

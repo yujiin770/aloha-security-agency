@@ -24,6 +24,7 @@ import {
 import { useAuth } from '@/contexts/AuthContext'
 import { useRoles } from '@/features/config/hooks/useConfig'
 import { formatRelative, humanize, initials } from '@/utils/format'
+import { roleTone } from '@/utils/constants'
 
 const createSchema = z.object({
   email: z.string().trim().min(1, 'Email is required').email('Enter a valid email'),
@@ -167,7 +168,7 @@ export default function UsersPage() {
               <Badge
                 key={role}
                 size="sm"
-                tone={role === 'owner' ? 'brand' : role === 'admin' ? 'info' : 'neutral'}
+                tone={roleTone(role)}
               >
                 {humanize(role)}
               </Badge>
@@ -286,6 +287,7 @@ export default function UsersPage() {
       <Modal
         open={createOpen}
         onClose={() => setCreateOpen(false)}
+        confirmClose={form.formState.isDirty}
         title="Create a staff member"
         description="The account is created and confirmed straight away — no email is sent."
         footer={

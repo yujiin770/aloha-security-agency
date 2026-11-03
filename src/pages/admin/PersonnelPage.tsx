@@ -1,13 +1,23 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { AlertTriangle, Download, Search } from 'lucide-react'
+import {
+  AlertTriangle,
+  Download,
+  MapPinned,
+  Search,
+  ShieldAlert,
+  UserCheck,
+  UsersRound,
+} from 'lucide-react'
 import { PageHeader } from '@/components/PageHeader'
 import { DataTable, type Column, type SortState } from '@/components/DataTable'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
 import { Field, Select } from '@/components/ui/Field'
 import { useToast } from '@/components/ui/Toast'
+import { StatCard } from '@/components/ui/Feedback'
+import { fetchDashboardStats } from '@/features/reports/api/reportsApi'
 import { queryKeys } from '@/lib/queryKeys'
 import { errorMessage } from '@/lib/errors'
 import { listPersonnel } from '@/features/personnel/api/personnelApi'
@@ -192,6 +202,14 @@ export default function PersonnelPage() {
     toast.success('Export ready', `${rows.length} row(s) downloaded.`)
   }
 
+  // Shares the dashboard's cache entry, so arriving from the dashboard costs
+  // no extra request.
+  const stats = useQuery({
+    queryKey: queryKeys.reports.dashboard(),
+    queryFn: fetchDashboardStats,
+  })
+  const p = stats.data?.personnel
+
   return (
     <>
       <PageHeader
@@ -208,6 +226,43 @@ export default function PersonnelPage() {
         }
       />
 
+      {!stats.isError && (
+        <section aria-label="Roster summary" className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <StatCard
+            icon={UsersRound}
+            label="Total personnel"
+            value={p?.total ?? 0}
+            caption="Every record on the roster"
+            isLoading={stats.isLoading}
+          />
+          <StatCard
+            icon={UserCheck}
+            tone="success"
+            label="Available"
+            value={Math.max(0, (p?.active ?? 0) - (p?.deployed ?? 0))}
+            caption={`${p?.active ?? 0} active, not on a post`}
+            isLoading={stats.isLoading}
+          />
+          <StatCard
+            icon={MapPinned}
+            tone="info"
+            label="Currently deployed"
+            value={p?.deployed ?? 0}
+            caption="On an active deployment"
+            to="/admin/deployments"
+            isLoading={stats.isLoading}
+          />
+          <StatCard
+            icon={ShieldAlert}
+            tone={(p?.license_expiring ?? 0) > 0 ? 'warning' : 'neutral'}
+            label="Licences expiring"
+            value={p?.license_expiring ?? 0}
+            caption="Within the next 60 days"
+            isLoading={stats.isLoading}
+          />
+        </section>
+      )}
+
       <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <div className="relative sm:col-span-2 lg:col-span-1">
           <Search
@@ -223,7 +278,7 @@ export default function PersonnelPage() {
             }}
             placeholder="Search name or employee no…"
             aria-label="Search personnel"
-            className="h-10 w-full rounded-lg border border-[var(--app-border)] bg-[var(--app-surface)] pl-9 text-sm text-[var(--app-text)] placeholder:text-[var(--app-text-subtle)]"
+            className="h-10 w-full rounded-lg border border-[var(--app-border)] bg-[var(--app-surface)] pr-3 pl-9 text-sm text-[var(--app-text)] shadow-[0_1px_1px_rgb(15_23_42/0.03)] transition-[border-color,box-shadow] placeholder:text-[var(--app-text-subtle)] focus:border-brand-500 focus:ring-[3px] focus:ring-brand-500/15 focus:outline-none"
           />
         </div>
 

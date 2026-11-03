@@ -1,5 +1,13 @@
 import type { ReactNode } from 'react'
-import { ArrowDown, ArrowUp, ArrowUpDown, ChevronLeft, ChevronRight } from 'lucide-react'
+import {
+  ArrowDown,
+  ArrowUp,
+  ArrowUpDown,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
+} from 'lucide-react'
 import { cn } from '@/utils/cn'
 import { Button } from '@/components/ui/Button'
 import { EmptyState, ErrorState, TableSkeleton } from '@/components/ui/Feedback'
@@ -93,7 +101,7 @@ export function DataTable<T>({
   }
 
   return (
-    <div className="overflow-hidden rounded-[var(--radius-card)] border border-[var(--app-border)] bg-[var(--app-surface)]">
+    <div className="overflow-hidden rounded-[var(--radius-card)] border border-[var(--app-border)] bg-[var(--app-surface)] shadow-[var(--shadow-card)]">
       {toolbar}
 
       {error ? (
@@ -128,7 +136,7 @@ export function DataTable<T>({
                             : undefined
                       }
                       className={cn(
-                        'px-4 py-3 text-left text-xs font-semibold tracking-wide text-[var(--app-text-muted)] uppercase',
+                        'px-4 py-2.5 text-left text-[11px] font-semibold tracking-wider whitespace-nowrap text-[var(--app-text-muted)] uppercase',
                         column.secondary && 'hidden lg:table-cell',
                         column.headerClassName,
                       )}
@@ -183,14 +191,15 @@ export function DataTable<T>({
                   }
                   className={cn(
                     'border-t border-[var(--app-border)] transition-colors',
-                    onRowClick && 'cursor-pointer hover:bg-[var(--app-bg)]',
+                    onRowClick &&
+                      'cursor-pointer hover:bg-[var(--app-bg)] focus-visible:bg-[var(--app-bg)]',
                   )}
                 >
                   {columns.map((column) => (
                     <td
                       key={column.key}
                       className={cn(
-                        'px-4 py-3 align-middle text-[var(--app-text)]',
+                        'px-4 py-3 align-middle text-sm text-[var(--app-text)]',
                         column.secondary && 'hidden lg:table-cell',
                         column.className,
                       )}
@@ -220,7 +229,7 @@ export function DataTable<T>({
                 <select
                   value={pageSize}
                   onChange={(e) => onPageSizeChange(Number(e.target.value))}
-                  className="h-8 rounded border border-[var(--app-border)] bg-[var(--app-surface)] px-2 text-xs"
+                  className="select-chevron h-8 rounded-md border border-[var(--app-border)] bg-[var(--app-surface)] pr-7 pl-2 text-xs"
                 >
                   {PAGE_SIZE_OPTIONS.map((size) => (
                     <option key={size} value={size}>
@@ -233,25 +242,80 @@ export function DataTable<T>({
 
             <nav className="flex items-center gap-1" aria-label="Pagination">
               <Button
-                variant="secondary"
+                variant="ghost"
+                size="sm"
+                disabled={page <= 1}
+                onClick={() => onPageChange(1)}
+                aria-label="First page"
+                className="hidden w-8 px-0 sm:inline-flex"
+              >
+                <ChevronsLeft className="h-4 w-4" aria-hidden="true" />
+              </Button>
+              <Button
+                variant="ghost"
                 size="sm"
                 disabled={page <= 1}
                 onClick={() => onPageChange(page - 1)}
                 aria-label="Previous page"
+                className="w-8 px-0"
               >
                 <ChevronLeft className="h-4 w-4" aria-hidden="true" />
               </Button>
-              <span className="px-2 text-xs text-[var(--app-text-muted)]">
-                Page {page} of {totalPages}
+
+              {/* Numbered pages from `sm` up; phones get the compact counter. */}
+              <span className="px-2 text-xs text-[var(--app-text-muted)] sm:hidden">
+                {page} / {totalPages}
               </span>
+              <ul className="hidden items-center gap-1 sm:flex">
+                {pageWindow(page, totalPages).map((item, index) =>
+                  item === 'gap' ? (
+                    <li
+                      key={`gap-${index}`}
+                      className="w-6 text-center text-xs text-[var(--app-text-subtle)]"
+                      aria-hidden="true"
+                    >
+                      …
+                    </li>
+                  ) : (
+                    <li key={item}>
+                      <button
+                        type="button"
+                        onClick={() => onPageChange(item)}
+                        aria-label={`Page ${item}`}
+                        aria-current={item === page ? 'page' : undefined}
+                        className={cn(
+                          'h-8 min-w-8 rounded-md px-2 text-xs font-medium tabular-nums transition-colors',
+                          item === page
+                            ? 'bg-brand-500 text-white'
+                            : 'text-[var(--app-text-muted)] hover:bg-[var(--app-bg)] hover:text-[var(--app-text)]',
+                        )}
+                      >
+                        {item}
+                      </button>
+                    </li>
+                  ),
+                )}
+              </ul>
+
               <Button
-                variant="secondary"
+                variant="ghost"
                 size="sm"
                 disabled={page >= totalPages}
                 onClick={() => onPageChange(page + 1)}
                 aria-label="Next page"
+                className="w-8 px-0"
               >
                 <ChevronRight className="h-4 w-4" aria-hidden="true" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                disabled={page >= totalPages}
+                onClick={() => onPageChange(totalPages)}
+                aria-label="Last page"
+                className="hidden w-8 px-0 sm:inline-flex"
+              >
+                <ChevronsRight className="h-4 w-4" aria-hidden="true" />
               </Button>
             </nav>
           </div>
@@ -259,4 +323,22 @@ export function DataTable<T>({
       )}
     </div>
   )
+}
+
+/**
+ * Page numbers to show: always the first and last, the current page and one
+ * either side, with `gap` where a run is skipped. Seven slots at most, so the
+ * control keeps its width however many pages there are.
+ */
+function pageWindow(page: number, total: number): (number | 'gap')[] {
+  if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1)
+
+  const start = Math.max(2, Math.min(page - 1, total - 4))
+  const end = Math.min(total - 1, Math.max(page + 1, 5))
+  const items: (number | 'gap')[] = [1]
+  if (start > 2) items.push('gap')
+  for (let n = start; n <= end; n++) items.push(n)
+  if (end < total - 1) items.push('gap')
+  items.push(total)
+  return items
 }

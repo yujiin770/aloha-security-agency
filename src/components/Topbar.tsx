@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { ChevronDown, LogOut, Menu, Monitor, Moon, Sun, User } from 'lucide-react'
+import { CalendarDays, ChevronDown, LogOut, Menu, Monitor, Moon, Sun, User } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { NotificationBell } from '@/features/notifications/components/NotificationBell'
 import { useAuth } from '@/contexts/AuthContext'
@@ -44,7 +44,7 @@ export function Topbar({ onOpenNav }: { onOpenNav: () => void }) {
   ]
 
   return (
-    <header className="sticky top-0 z-30 flex h-16 shrink-0 items-center justify-between gap-3 border-b border-[var(--app-border)] bg-[var(--app-surface)] px-4 sm:px-6">
+    <header className="sticky top-0 z-30 flex h-16 shrink-0 items-center justify-between gap-3 border-b border-[var(--app-border)] bg-[var(--app-surface)]/90 px-4 backdrop-blur-md sm:px-6 lg:px-8">
       <Button
         variant="ghost"
         size="icon"
@@ -55,7 +55,19 @@ export function Topbar({ onOpenNav }: { onOpenNav: () => void }) {
         <Menu className="h-5 w-5" aria-hidden="true" />
       </Button>
 
-      <div className="flex-1" />
+      <div className="flex min-w-0 flex-1 items-center">
+        <p className="hidden items-center gap-2 text-sm text-[var(--app-text-muted)] md:flex">
+          <CalendarDays className="h-4 w-4 text-[var(--app-text-subtle)]" aria-hidden="true" />
+          <time dateTime={new Date().toISOString().slice(0, 10)}>
+            {new Date().toLocaleDateString('en-PH', {
+              weekday: 'long',
+              month: 'long',
+              day: 'numeric',
+              year: 'numeric',
+            })}
+          </time>
+        </p>
+      </div>
 
       <div className="flex items-center gap-1">
         <NotificationBell />
@@ -68,7 +80,7 @@ export function Topbar({ onOpenNav }: { onOpenNav: () => void }) {
             aria-haspopup="menu"
             className="flex items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-[var(--app-bg)]"
           >
-            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-ink text-xs font-semibold text-white dark:bg-brand-500">
+            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-500 text-xs font-semibold text-white">
               {initials(user?.profile.full_name)}
             </span>
             <span className="hidden text-left sm:block">

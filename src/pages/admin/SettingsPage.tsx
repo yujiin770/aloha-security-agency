@@ -1,6 +1,22 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { Globe, Lock, Save, Settings2 } from 'lucide-react'
+import {
+  Building,
+  ChevronRight,
+  ClipboardList,
+  DatabaseBackup,
+  Globe,
+  HardDrive,
+  Lock,
+  Mail,
+  Save,
+  Settings2,
+  Timer,
+  UserCircle,
+} from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
+import { cn } from '@/utils/cn'
 import { PageHeader } from '@/components/PageHeader'
 import { Card, CardHeader } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
@@ -15,30 +31,35 @@ import { useAuth } from '@/contexts/AuthContext'
 import type { Json, SettingRow } from '@/types/database.types'
 
 /** Groups a flat `company.name` style key list into labelled sections. */
-const GROUPS: { prefix: string; title: string; description: string }[] = [
+const GROUPS: { prefix: string; title: string; description: string; icon: LucideIcon }[] = [
   {
     prefix: 'company.',
+    icon: Building,
     title: 'Company details',
     description: 'Shown on the public site and in outgoing email.',
   },
   {
     prefix: 'recruitment.',
+    icon: ClipboardList,
     title: 'Recruitment',
     description: 'Controls the public application form.',
   },
   {
     prefix: 'retention.',
+    icon: Timer,
     title: 'Data retention',
     description:
       'How long records are kept before permanent deletion. Enforced by the scheduled purge function.',
   },
   {
     prefix: 'notifications.',
-    title: 'Notifications',
+    icon: Mail,
+    title: 'Email & notifications',
     description: 'Transactional email behaviour.',
   },
   {
     prefix: 'storage.',
+    icon: HardDrive,
     title: 'Storage',
     description: 'Document access behaviour.',
   },
@@ -81,6 +102,18 @@ export default function SettingsPage() {
   const update = useUpdateSetting()
 
   const [drafts, setDrafts] = useState<Record<string, string>>({})
+  const [activeTab, setActiveTab] = useState<string | null>(null)
+
+  // Unsaved edits are lost on reload or tab close, so the browser asks first.
+  const hasDrafts = Object.keys(drafts).length > 0
+  useEffect(() => {
+    if (!hasDrafts) return
+    function onBeforeUnload(event: BeforeUnloadEvent) {
+      event.preventDefault()
+    }
+    window.addEventListener('beforeunload', onBeforeUnload)
+    return () => window.removeEventListener('beforeunload', onBeforeUnload)
+  }, [hasDrafts])
 
   const save = useMutation({
     mutationFn: async (key: string) => {
@@ -128,7 +161,7 @@ export default function SettingsPage() {
     <>
       <PageHeader
         title="Settings"
-        description="System configuration. Changes take effect immediately."
+        description="Your profile and system configuration. Saved changes take effect immediately."
       />
 
       {!isAdmin && (
@@ -145,54 +178,152 @@ export default function SettingsPage() {
       )}
 
       {settings.isLoading ? (
-        <div className="space-y-6">
-          {Array.from({ length: 3 }).map((_, i) => (
-            <Skeleton key={i} className="h-64 rounded-[var(--radius-card)]" />
-          ))}
+        <div className="grid gap-6 lg:grid-cols-[15rem_1fr]">
+          <Skeleton className="h-64 rounded-[var(--radius-card)]" />
+          <Skeleton className="h-96 rounded-[var(--radius-card)]" />
         </div>
       ) : (
-        <div className="space-y-6">
-          {[...grouped, ...(ungrouped.length > 0
-            ? [
-                {
-                  prefix: '',
-                  title: 'Other',
-                  description: '',
-                  items: ungrouped,
-                },
-              ]
-            : [])].map((group) => (
-            <Card key={group.title} padded={false}>
-              <CardHeader
-                title={group.title}
-                description={group.description}
-                icon={<Settings2 className="h-4 w-4" aria-hidden="true" />}
-              />
-              <div className="divide-y divide-[var(--app-border)]">
-                {group.items.map((row) => (
-                  <SettingRowEditor
-                    key={row.key}
-                    row={row}
-                    draft={drafts[row.key]}
-                    readOnly={!isAdmin}
-                    isSaving={save.isPending && save.variables === row.key}
-                    onChange={(value) =>
-                      setDrafts((current) => ({ ...current, [row.key]: value }))
-                    }
-                    onSave={() => save.mutate(row.key)}
-                    onReset={() =>
-                      setDrafts((current) => {
-                        const next = { ...current }
-                        delete next[row.key]
-                        return next
-                      })
-                    }
+        (() => {
+          const sections = [
+            ...grouped,
+            ...(ungrouped.length > 0
+              ? [
+                  {
+                    prefix: '',
+                    title: 'Other',
+                    description: 'Internal settings that fit no other section.',
+                    icon: Settings2,
+                    items: ungrouped,
+                  },
+                ]
+              : []),
+          ]
+          const current =
+            sections.find((section) => section.title === activeTab) ?? sections[0]
+          const unsaved = (items: SettingRow[]) =>
+            items.filter((row) => drafts[row.key] !== undefined).length
+
+          return (
+            <div className="grid items-start gap-6 lg:grid-cols-[15rem_1fr]">
+              {/* Section nav: a column on desktop, a scrolling strip on phones. */}
+              <nav
+                aria-label="Settings sections"
+                className="no-scrollbar -mx-4 flex gap-1 overflow-x-auto px-4 lg:sticky lg:top-24 lg:mx-0 lg:flex-col lg:overflow-visible lg:px-0"
+              >
+                <Link
+                  to="/admin/settings/profile"
+                  className="flex shrink-0 items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium whitespace-nowrap text-[var(--app-text-muted)] transition-colors hover:bg-[var(--app-surface)] hover:text-[var(--app-text)]"
+                >
+                  <UserCircle className="h-4 w-4 shrink-0" aria-hidden="true" />
+                  <span className="flex-1">My profile & security</span>
+                  <ChevronRight className="hidden h-4 w-4 opacity-50 lg:block" aria-hidden="true" />
+                </Link>
+                <p className="hidden px-3 pt-4 pb-1 text-[11px] font-semibold tracking-wider text-[var(--app-text-subtle)] uppercase lg:block">
+                  System configuration
+                </p>
+                {sections.map((section) => {
+                  const isActive = section === current
+                  const pending = unsaved(section.items)
+                  return (
+                    <button
+                      key={section.title}
+                      type="button"
+                      onClick={() => setActiveTab(section.title)}
+                      aria-current={isActive ? 'page' : undefined}
+                      className={cn(
+                        'flex shrink-0 items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm font-medium whitespace-nowrap transition-colors',
+                        isActive
+                          ? 'bg-[var(--app-surface)] text-brand-600 shadow-[var(--shadow-card)] ring-1 ring-[var(--app-border)] dark:text-brand-300'
+                          : 'text-[var(--app-text-muted)] hover:bg-[var(--app-surface)] hover:text-[var(--app-text)]',
+                      )}
+                    >
+                      <section.icon className="h-4 w-4 shrink-0" aria-hidden="true" />
+                      <span className="flex-1">{section.title}</span>
+                      {pending > 0 && (
+                        <span
+                          className="rounded-full bg-warning px-1.5 text-[10px] leading-4 font-semibold text-white"
+                          title={`${pending} unsaved`}
+                        >
+                          {pending}
+                          <span className="sr-only"> unsaved</span>
+                        </span>
+                      )}
+                    </button>
+                  )
+                })}
+                <a
+                  href="#backup"
+                  onClick={() => setActiveTab('__backup')}
+                  className={cn(
+                    'flex shrink-0 items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium whitespace-nowrap transition-colors',
+                    activeTab === '__backup'
+                      ? 'bg-[var(--app-surface)] text-brand-600 shadow-[var(--shadow-card)] ring-1 ring-[var(--app-border)] dark:text-brand-300'
+                      : 'text-[var(--app-text-muted)] hover:bg-[var(--app-surface)] hover:text-[var(--app-text)]',
+                  )}
+                >
+                  <DatabaseBackup className="h-4 w-4 shrink-0" aria-hidden="true" />
+                  Backup & restore
+                </a>
+              </nav>
+
+              {activeTab === '__backup' ? (
+                <Card padded={false} as="section">
+                  <CardHeader
+                    title="Backup & restore"
+                    description="Where the agency's data is protected"
+                    icon={<DatabaseBackup className="h-4 w-4" aria-hidden="true" />}
                   />
-                ))}
-              </div>
-            </Card>
-          ))}
-        </div>
+                  <div id="backup" className="space-y-3 p-5 text-sm text-[var(--app-text-muted)]">
+                    <p>
+                      Database backups and point-in-time restore are handled by the
+                      Supabase project that hosts this system, not from inside the
+                      console. That keeps a restore — which overwrites live records —
+                      behind the project owner's own sign-in.
+                    </p>
+                    <p>
+                      To check the latest backup or restore one, open the project in
+                      the Supabase dashboard and go to <strong>Database → Backups</strong>.
+                    </p>
+                  </div>
+                </Card>
+              ) : current ? (
+                <Card key={current.title} padded={false} as="section">
+                  <CardHeader
+                    title={current.title}
+                    description={current.description}
+                    icon={<current.icon className="h-4 w-4" aria-hidden="true" />}
+                  />
+                  <div className="divide-y divide-[var(--app-border)]">
+                    {current.items.map((row) => (
+                      <SettingRowEditor
+                        key={row.key}
+                        row={row}
+                        draft={drafts[row.key]}
+                        readOnly={!isAdmin}
+                        isSaving={save.isPending && save.variables === row.key}
+                        onChange={(value) =>
+                          setDrafts((existing) => ({ ...existing, [row.key]: value }))
+                        }
+                        onSave={() => save.mutate(row.key)}
+                        onReset={() =>
+                          setDrafts((existing) => {
+                            const next = { ...existing }
+                            delete next[row.key]
+                            return next
+                          })
+                        }
+                      />
+                    ))}
+                  </div>
+                </Card>
+              ) : (
+                <Card>
+                  <p className="text-sm text-[var(--app-text-muted)]">No settings are configured yet.</p>
+                </Card>
+              )}
+            </div>
+          )
+        })()
       )}
     </>
   )

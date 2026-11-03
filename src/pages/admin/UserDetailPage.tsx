@@ -20,6 +20,7 @@ import {
 import { useAuth } from '@/contexts/AuthContext'
 import { useRoles } from '@/features/config/hooks/useConfig'
 import { formatDateTime, formatRelative, humanize, initials } from '@/utils/format'
+import { roleTone } from '@/utils/constants'
 
 export default function UserDetailPage() {
   const { id = '' } = useParams()
@@ -248,9 +249,7 @@ export default function UserDetailPage() {
                     <Badge
                       key={role}
                       size="sm"
-                      tone={
-                        role === 'owner' ? 'brand' : role === 'admin' ? 'info' : 'neutral'
-                      }
+                      tone={roleTone(role)}
                     >
                       {humanize(role)}
                     </Badge>

@@ -66,11 +66,11 @@ export function Field({
         {label && (
           <label
             htmlFor={value.id}
-            className="text-sm font-medium text-[var(--app-text)]"
+            className="text-[13px] font-medium text-[var(--app-text)]"
           >
             {label}
             {required && (
-              <span className="ml-1 text-brand-500" aria-hidden="true">
+              <span className="ml-0.5 text-danger" aria-hidden="true">
                 *
               </span>
             )}
@@ -102,17 +102,22 @@ export function Field({
 }
 
 const CONTROL_BASE =
-  'w-full rounded-lg border bg-[var(--app-surface)] px-3 text-sm text-[var(--app-text)] ' +
-  'placeholder:text-[var(--app-text-subtle)] transition-colors ' +
-  'disabled:cursor-not-allowed disabled:opacity-60 ' +
-  'read-only:bg-[var(--app-bg)]'
+  'w-full rounded-lg border bg-[var(--app-surface)] px-3 text-sm text-[var(--app-text)] shadow-[0_1px_1px_rgb(15_23_42/0.03)] ' +
+  'placeholder:text-[var(--app-text-subtle)] transition-[border-color,box-shadow] duration-150 ' +
+  'hover:border-[color-mix(in_srgb,var(--app-text-subtle)_45%,var(--app-border))] ' +
+  'focus:outline-none focus:ring-[3px] ' +
+  'disabled:cursor-not-allowed disabled:bg-[var(--app-bg)] disabled:text-[var(--app-text-muted)] disabled:opacity-70'
+
+/** Text inputs only — `<select>` always matches `:read-only` per the HTML spec. */
+const READ_ONLY =
+  'read-only:bg-[var(--app-bg)] read-only:text-[var(--app-text-muted)] read-only:focus:ring-0'
 
 function controlClasses(hasError: boolean, extra?: string) {
   return cn(
     CONTROL_BASE,
     hasError
-      ? 'border-danger focus:border-danger'
-      : 'border-[var(--app-border)] focus:border-brand-500',
+      ? 'border-danger focus:border-danger focus:ring-danger/15'
+      : 'border-[var(--app-border)] focus:border-brand-500 focus:ring-brand-500/15',
     extra,
   )
 }
@@ -134,7 +139,7 @@ export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputE
         id={props.id ?? ctx?.id}
         aria-invalid={ctx?.hasError || undefined}
         aria-describedby={describedBy(ctx)}
-        className={controlClasses(Boolean(ctx?.hasError), cn('h-10', className))}
+        className={controlClasses(Boolean(ctx?.hasError), cn('h-10', READ_ONLY, className))}
         {...props}
       />
     )
@@ -153,7 +158,7 @@ export const Textarea = forwardRef<
       id={props.id ?? ctx?.id}
       aria-invalid={ctx?.hasError || undefined}
       aria-describedby={describedBy(ctx)}
-      className={controlClasses(Boolean(ctx?.hasError), cn('py-2 resize-y', className))}
+      className={controlClasses(Boolean(ctx?.hasError), cn('py-2 resize-y', READ_ONLY, className))}
       {...props}
     />
   )
@@ -181,7 +186,7 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(function Select
       id={props.id ?? ctx?.id}
       aria-invalid={ctx?.hasError || undefined}
       aria-describedby={describedBy(ctx)}
-      className={controlClasses(Boolean(ctx?.hasError), cn('h-10 pr-8', className))}
+      className={controlClasses(Boolean(ctx?.hasError), cn('select-chevron h-10 pr-9', className))}
       {...props}
     >
       {placeholder && <option value="">{placeholder}</option>}
@@ -210,7 +215,7 @@ export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(function Che
         ref={ref}
         id={props.id ?? id}
         type="checkbox"
-        className="mt-0.5 h-4 w-4 shrink-0 rounded border-[var(--app-border)] text-brand-500 accent-[var(--color-brand-500)]"
+        className="mt-0.5 h-4 w-4 shrink-0 cursor-pointer rounded border-[var(--app-border)] text-brand-500 accent-[var(--color-brand-500)] disabled:cursor-not-allowed"
         {...props}
       />
       <div className="flex flex-col">

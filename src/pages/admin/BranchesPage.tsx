@@ -2,7 +2,18 @@ import { useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
-import { Building2, Pencil, Plus, PowerOff, Power, Search, X } from 'lucide-react'
+import {
+  Building2,
+  Gauge,
+  Pencil,
+  Plus,
+  PowerOff,
+  Power,
+  Search,
+  ShieldAlert,
+  UsersRound,
+  X,
+} from 'lucide-react'
 import { zodResolver } from '@/lib/zodResolver'
 import { PageHeader } from '@/components/PageHeader'
 import { Card } from '@/components/ui/Card'
@@ -10,7 +21,7 @@ import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Field, Input, Select, Textarea } from '@/components/ui/Field'
 import { Modal, ConfirmDialog } from '@/components/ui/Modal'
-import { EmptyState, ErrorState, Skeleton } from '@/components/ui/Feedback'
+import { EmptyState, ErrorState, Skeleton, StatCard } from '@/components/ui/Feedback'
 import { useToast } from '@/components/ui/Toast'
 import { Can } from '@/app/guards'
 import { queryKeys } from '@/lib/queryKeys'
@@ -241,6 +252,21 @@ export default function BranchesPage() {
 
   const errors = form.formState.errors
 
+  // Totals across active facilities only — an inactive site's requirement is
+  // not a vacancy anyone needs to fill.
+  const summary = useMemo(() => {
+    const active = (staffing.data ?? []).filter((b) => b.is_active)
+    const required = active.reduce((sum, b) => sum + b.required_headcount, 0)
+    const deployed = active.reduce((sum, b) => sum + b.deployed_count, 0)
+    return {
+      facilities: active.length,
+      required,
+      deployed,
+      vacancies: active.reduce((sum, b) => sum + b.vacancy_count, 0),
+      fill: required === 0 ? null : (deployed / required) * 100,
+    }
+  }, [staffing.data])
+
   return (
     <>
       <PageHeader
@@ -255,6 +281,42 @@ export default function BranchesPage() {
         }
       />
 
+      {!staffing.isError && (
+        <section aria-label="Facility summary" className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <StatCard
+            icon={Building2}
+            label="Active facilities"
+            value={summary.facilities}
+            caption={`${branches.data?.length ?? 0} on record`}
+            isLoading={staffing.isLoading}
+          />
+          <StatCard
+            icon={UsersRound}
+            tone="info"
+            label="Guards deployed"
+            value={`${summary.deployed} / ${summary.required}`}
+            caption="Deployed against required headcount"
+            isLoading={staffing.isLoading}
+          />
+          <StatCard
+            icon={ShieldAlert}
+            tone={summary.vacancies > 0 ? 'danger' : 'neutral'}
+            label="Open posts"
+            value={summary.vacancies}
+            caption="Unfilled positions at active sites"
+            isLoading={staffing.isLoading}
+          />
+          <StatCard
+            icon={Gauge}
+            tone={summary.fill === null ? 'neutral' : summary.fill >= 100 ? 'success' : summary.fill >= 70 ? 'warning' : 'danger'}
+            label="Overall fill rate"
+            value={formatPercent(summary.fill)}
+            caption="Across all active facilities"
+            isLoading={staffing.isLoading}
+          />
+        </section>
+      )}
+
       {/* Filters ---------------------------------------------------------- */}
       <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <div className="relative sm:col-span-2 lg:col-span-1">
@@ -268,7 +330,7 @@ export default function BranchesPage() {
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search code, name, city or contact…"
             aria-label="Search facilities"
-            className="h-10 w-full rounded-lg border border-[var(--app-border)] bg-[var(--app-surface)] pl-9 text-sm text-[var(--app-text)] placeholder:text-[var(--app-text-subtle)]"
+            className="h-10 w-full rounded-lg border border-[var(--app-border)] bg-[var(--app-surface)] pr-3 pl-9 text-sm text-[var(--app-text)] shadow-[0_1px_1px_rgb(15_23_42/0.03)] transition-[border-color,box-shadow] placeholder:text-[var(--app-text-subtle)] focus:border-brand-500 focus:ring-[3px] focus:ring-brand-500/15 focus:outline-none"
           />
         </div>
 
@@ -473,7 +535,9 @@ export default function BranchesPage() {
       <Modal
         open={creating}
         onClose={closeDialog}
+        confirmClose={form.formState.isDirty}
         title={editing ? `Edit ${editing.name}` : 'New facility'}
+        description="Location, staffing requirement and site contact"
         size="lg"
         footer={
           <>
@@ -484,7 +548,7 @@ export default function BranchesPage() {
               onClick={form.handleSubmit((values) => save.mutate(values))}
               isLoading={save.isPending}
             >
-              {editing ? 'Save changes' : 'Create branch'}
+              {editing ? 'Save changes' : 'Create facility'}
             </Button>
           </>
         }

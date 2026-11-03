@@ -2,21 +2,29 @@ import { useCallback, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
+  Archive,
   ArrowLeft,
   BadgeCheck,
   CalendarClock,
-  Download,
+  Eye,
+  FileImage,
+  FileText,
   Mail,
   Phone,
+  RotateCcw,
+  ScanSearch,
   UserPlus,
+  XCircle,
 } from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
 import { PageHeader } from '@/components/PageHeader'
 import { Card, CardHeader } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Checkbox, Field, Input, Select, Textarea } from '@/components/ui/Field'
 import { Modal } from '@/components/ui/Modal'
-import { ErrorState, LoadingState } from '@/components/ui/Feedback'
+import { ErrorState, LoadingState, Skeleton } from '@/components/ui/Feedback'
+import { ImageViewer } from '@/components/ui/ImageViewer'
 import { useToast } from '@/components/ui/Toast'
 import { Can } from '@/app/guards'
 import { queryKeys } from '@/lib/queryKeys'
@@ -55,7 +63,26 @@ import {
   maskId,
 } from '@/utils/format'
 import { formatFeetInches, formatPounds } from '@/utils/units'
-import type { ApplicantStatus } from '@/types/database.types'
+import type { ApplicantDocumentRow, ApplicantStatus } from '@/types/database.types'
+
+/**
+ * How each pipeline move is offered. The verbs say what the click does, and the
+ * icon plus variant set the consequential moves apart from routine ones.
+ */
+const MOVE_ACTIONS: Record<
+  ApplicantStatus,
+  { label: string; icon: LucideIcon; variant: 'primary' | 'secondary' | 'danger' | 'ghost' }
+> = {
+  pending: { label: 'Return to Pending', icon: RotateCcw, variant: 'ghost' },
+  screening: { label: 'Move to Screening', icon: ScanSearch, variant: 'secondary' },
+  interview: { label: 'Schedule Interview', icon: CalendarClock, variant: 'primary' },
+  hired: { label: 'Mark as Hired', icon: UserPlus, variant: 'primary' },
+  rejected: { label: 'Reject Application', icon: XCircle, variant: 'danger' },
+  archived: { label: 'Archive Applicant', icon: Archive, variant: 'ghost' },
+}
+
+const isImage = (doc: ApplicantDocumentRow) =>
+  doc.mime_type?.startsWith('image/') ?? /\.(jpe?g|png|webp|gif)$/i.test(doc.file_name)
 
 /**
  * Statuses `buildStatusEmail` produces a template for. Kept in step with it —
@@ -198,9 +225,31 @@ export default function ApplicantDetailPage() {
     setNotify(true)
   }, [])
 
+  // Images preview in place; anything else (PDFs) opens in a new tab, where
+  // the browser's own viewer does a better job than we could.
+  const [preview, setPreview] = useState<{ doc: ApplicantDocumentRow; url: string | null } | null>(
+    null,
+  )
+
+  async function loadPreview(doc: ApplicantDocumentRow) {
+    setPreview({ doc, url: null })
+    try {
+      // Signed links expire after a minute, so a retry always asks for a new one.
+      const url = await getDocumentUrl(doc)
+      setPreview((current) => (current?.doc.id === doc.id ? { doc, url } : current))
+    } catch (error) {
+      setPreview(null)
+      toast.error('Could not load preview', errorMessage(error))
+    }
+  }
+
   async function openDocument(docId: string) {
     const doc = documents.data?.find((d) => d.id === docId)
     if (!doc) return
+    if (isImage(doc)) {
+      void loadPreview(doc)
+      return
+    }
     try {
       const url = await getDocumentUrl(doc)
       window.open(url, '_blank', 'noopener,noreferrer')
@@ -274,7 +323,7 @@ export default function ApplicantDetailPage() {
                   leftIcon={<UserPlus className="h-4 w-4" />}
                   onClick={() => setHireOpen(true)}
                 >
-                  Hire
+                  Mark as Hired
                 </Button>
               </Can>
             )}
@@ -286,20 +335,21 @@ export default function ApplicantDetailPage() {
       <Can roles={[...ADMIN_ROLES, 'hr_staff', 'recruitment_officer']}>
         {allowedMoves.length > 0 && (
           <Card className="mb-6">
-            <div className="flex flex-wrap items-center gap-3">
-              <p className="text-sm font-medium text-[var(--app-text)]">
-                Move this applicant to:
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="mr-1 text-xs font-semibold tracking-wider text-[var(--app-text-muted)] uppercase">
+                Recruitment actions
               </p>
               {allowedMoves.map((target) => {
-                const meta = applicantStatusMeta(target)
+                const action = MOVE_ACTIONS[target]
                 return (
                   <Button
                     key={target}
                     size="sm"
-                    variant={target === 'rejected' ? 'danger' : 'secondary'}
+                    variant={action.variant}
+                    leftIcon={<action.icon className="h-3.5 w-3.5" aria-hidden="true" />}
                     onClick={() => setStatusTarget(target)}
                   >
-                    {meta?.label}
+                    {action.label}
                   </Button>
                 )
               })}
@@ -307,7 +357,7 @@ export default function ApplicantDetailPage() {
 
             {a.status === 'interview' && (
               <p className="mt-3 border-t border-[var(--app-border)] pt-3 text-xs text-[var(--app-text-muted)]">
-                To hire, use the <strong>Hire</strong> button above — it creates
+                To hire, use the <strong>Mark as Hired</strong> button above — it creates
                 the personnel record and employee number in the same
                 transaction, which is what puts this person on the roster and
                 makes them assignable to a post.
@@ -321,7 +371,7 @@ export default function ApplicantDetailPage() {
         <div className="space-y-6 lg:col-span-2">
           {/* Personal ---------------------------------------------------- */}
           <Card padded={false}>
-            <CardHeader title="Personal details" />
+            <CardHeader title="Personal information" />
             <DetailGrid
               items={[
                 ['Full name', fullName(a)],
@@ -336,19 +386,27 @@ export default function ApplicantDetailPage() {
                   'Weight',
                   a.weight_kg ? `${a.weight_kg} kg (${formatPounds(a.weight_kg)})` : '—',
                 ],
-                [
-                  'Address',
-                  [a.address_line, a.barangay, a.city_municipality, a.province, a.region]
-                    .filter(Boolean)
-                    .join(', ') || '—',
-                ],
+              ]}
+            />
+          </Card>
+
+          {/* Address ----------------------------------------------------- */}
+          <Card padded={false}>
+            <CardHeader title="Address" />
+            <DetailGrid
+              items={[
+                ['Street / house no.', a.address_line || '—'],
+                ['Barangay', a.barangay || '—'],
+                ['City / municipality', a.city_municipality || '—'],
+                ['Province', a.province || '—'],
+                ['Region', a.region || '—'],
               ]}
             />
           </Card>
 
           {/* Application ------------------------------------------------- */}
           <Card padded={false}>
-            <CardHeader title="Application" />
+            <CardHeader title="Application details" />
             <DetailGrid
               items={[
                 ['Position applied', positionLookup.name(a.position_id)],
@@ -364,7 +422,7 @@ export default function ApplicantDetailPage() {
           {/* Credentials -------------------------------------------------- */}
           <Card padded={false}>
             <CardHeader
-              title="Credentials"
+              title="Employment background & credentials"
               description="Statutory numbers are masked — expand a record in the audit log to see a full value."
             />
             <DetailGrid
@@ -389,11 +447,21 @@ export default function ApplicantDetailPage() {
           {/* Documents ---------------------------------------------------- */}
           <Card padded={false}>
             <CardHeader
-              title="Documents"
+              title="Uploaded documents"
               description={`${documents.data?.length ?? 0} uploaded`}
             />
             {documents.isLoading ? (
-              <p className="p-5 text-sm text-[var(--app-text-muted)]">Loading…</p>
+              <div className="space-y-3 p-5">
+                {Array.from({ length: 3 }).map((_, i) => (
+                  <Skeleton key={i} className="h-11" />
+                ))}
+              </div>
+            ) : documents.isError ? (
+              <ErrorState
+                message={errorMessage(documents.error)}
+                onRetry={() => void documents.refetch()}
+                className="py-8"
+              />
             ) : (documents.data?.length ?? 0) === 0 ? (
               <p className="p-5 text-sm text-[var(--app-text-muted)]">
                 No documents were uploaded with this application.
@@ -405,6 +473,13 @@ export default function ApplicantDetailPage() {
                     key={doc.id}
                     className="flex flex-wrap items-center gap-3 px-5 py-3"
                   >
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[var(--app-bg)] text-[var(--app-text-subtle)]">
+                      {isImage(doc) ? (
+                        <FileImage className="h-4 w-4" aria-hidden="true" />
+                      ) : (
+                        <FileText className="h-4 w-4" aria-hidden="true" />
+                      )}
+                    </span>
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-medium text-[var(--app-text)]">
                         {documentTypeMeta(doc.document_type)?.label ??
@@ -436,17 +511,17 @@ export default function ApplicantDetailPage() {
                     <Button
                       size="sm"
                       variant="secondary"
-                      leftIcon={<Download className="h-3.5 w-3.5" />}
+                      leftIcon={<Eye className="h-3.5 w-3.5" />}
                       onClick={() => void openDocument(doc.id)}
                     >
-                      Open
+                      {isImage(doc) ? 'Preview' : 'Open'}
                     </Button>
                   </li>
                 ))}
               </ul>
             )}
             <p className="border-t border-[var(--app-border)] px-5 py-2.5 text-xs text-[var(--app-text-subtle)]">
-              Documents open through a signed link that expires after 60 seconds.
+              Images preview here; other files open in a new tab. Links are signed and expire after 60 seconds.
             </p>
           </Card>
         </div>
@@ -553,13 +628,26 @@ export default function ApplicantDetailPage() {
         </div>
       </div>
 
+      {/* Document preview ------------------------------------------------- */}
+      <ImageViewer
+        open={preview !== null}
+        onClose={() => setPreview(null)}
+        src={preview?.url ?? null}
+        alt={preview ? `${documentTypeMeta(preview.doc.document_type)?.label ?? 'Document'} for ${fullName(a)}` : ''}
+        title={preview ? (documentTypeMeta(preview.doc.document_type)?.label ?? humanize(preview.doc.document_type)) : undefined}
+        subtitle={preview ? `${preview.doc.file_name} · ${fullName(a)}` : undefined}
+        onRetry={preview ? () => void loadPreview(preview.doc) : undefined}
+      />
+
       {/* Status change dialog --------------------------------------------- */}
       <Modal
         open={statusTarget !== null}
         onClose={closeStatusDialog}
-        title={`Move to ${applicantStatusMeta(statusTarget ?? 'pending')?.label ?? ''}`}
+        title={statusTarget ? MOVE_ACTIONS[statusTarget].label : ''}
         description={`${fullName(a)} · ${a.reference_no}`}
         size="sm"
+        // A typed rejection reason or note should not vanish on a stray Esc.
+        confirmClose={rejectionReason.trim() !== '' || note.trim() !== ''}
         footer={
           <>
             <Button variant="secondary" onClick={closeStatusDialog}>
@@ -571,12 +659,24 @@ export default function ApplicantDetailPage() {
               isLoading={changeStatus.isPending}
               disabled={statusTarget === 'rejected' && rejectionReason.trim().length === 0}
             >
-              Confirm
+              {statusTarget === 'rejected'
+                ? 'Reject application'
+                : statusTarget === 'archived'
+                  ? 'Archive applicant'
+                  : 'Confirm'}
             </Button>
           </>
         }
       >
         <div className="space-y-4">
+          {(statusTarget === 'rejected' || statusTarget === 'archived') && (
+            <p className="rounded-lg border border-warning/30 bg-warning-soft px-3 py-2 text-sm text-amber-900 dark:bg-warning/10 dark:text-amber-200">
+              {statusTarget === 'rejected'
+                ? 'The applicant leaves the active pipeline. This can be undone only by returning them to Pending.'
+                : 'Archived applicants are closed and retained per policy. This cannot be moved back.'}
+            </p>
+          )}
+
           {statusTarget === 'rejected' && (
             <Field
               label="Reason for rejection"

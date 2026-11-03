@@ -1,5 +1,7 @@
 import type { ReactNode } from 'react'
-import { AlertTriangle, Inbox, Loader2 } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { AlertTriangle, Inbox, Loader2, RotateCw } from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
 import { cn } from '@/utils/cn'
 import { Button } from './Button'
 import { motion } from 'framer-motion'
@@ -115,7 +117,7 @@ export function EmptyState({
         className,
       )}
     >
-      <div className="rounded-full bg-[var(--app-bg)] p-3 text-[var(--app-text-subtle)]">
+      <div className="rounded-xl border border-[var(--app-border)] bg-[var(--app-bg)] p-3 text-[var(--app-text-subtle)]">
         {icon ?? <Inbox className="h-6 w-6" aria-hidden="true" />}
       </div>
       <div>
@@ -162,10 +164,97 @@ export function ErrorState({
         </p>
       </div>
       {onRetry && (
-        <Button variant="secondary" size="sm" onClick={onRetry}>
+        <Button
+          variant="secondary"
+          size="sm"
+          onClick={onRetry}
+          leftIcon={<RotateCw className="h-3.5 w-3.5" aria-hidden="true" />}
+        >
           Try again
         </Button>
       )}
     </div>
+  )
+}
+
+/* -------------------------------------------------------------------------- */
+/* KPI tile                                                                    */
+/* -------------------------------------------------------------------------- */
+
+export type StatTone = 'primary' | 'info' | 'warning' | 'success' | 'danger' | 'violet' | 'neutral'
+
+const STAT_ICON_TONES: Record<StatTone, string> = {
+  primary: 'bg-brand-50 text-brand-600 dark:text-brand-300',
+  info: 'bg-info-soft text-info dark:bg-info/15 dark:text-blue-300',
+  warning: 'bg-warning-soft text-warning dark:bg-warning/15 dark:text-amber-300',
+  success: 'bg-success-soft text-success dark:bg-success/15 dark:text-green-300',
+  danger: 'bg-danger-soft text-danger dark:bg-danger/15 dark:text-red-300',
+  violet: 'bg-violet-soft text-violet dark:bg-violet/15 dark:text-violet-300',
+  neutral: 'bg-[var(--app-bg)] text-[var(--app-text-muted)]',
+}
+
+export interface StatCardProps {
+  label: string
+  value: ReactNode
+  icon: LucideIcon
+  tone?: StatTone
+  /** One line of context under the number — never an invented trend. */
+  caption?: ReactNode
+  /** Makes the whole tile a link (e.g. to the filtered list). */
+  to?: string
+  isLoading?: boolean
+  className?: string
+}
+
+/**
+ * A summary number with its label and icon.
+ *
+ * The icon is decoration — the label carries the meaning — and the value is
+ * tabular so a row of tiles lines up as the numbers change.
+ */
+export function StatCard({
+  label,
+  value,
+  icon: Icon,
+  tone = 'primary',
+  caption,
+  to,
+  isLoading,
+  className,
+}: StatCardProps) {
+  const body = (
+    <>
+      <div className="flex items-start justify-between gap-3">
+        <p className="text-[13px] font-medium text-[var(--app-text-muted)]">{label}</p>
+        <span className={cn('shrink-0 rounded-lg p-2', STAT_ICON_TONES[tone])}>
+          <Icon className="h-4 w-4" aria-hidden="true" />
+        </span>
+      </div>
+      {isLoading ? (
+        <Skeleton className="mt-2 h-8 w-20" />
+      ) : (
+        <p className="mt-1 text-[28px] leading-9 font-semibold tracking-tight text-[var(--app-text)] tabular-nums">
+          {value}
+        </p>
+      )}
+      {caption && (
+        <p className="mt-1 truncate text-xs text-[var(--app-text-subtle)]">{caption}</p>
+      )}
+    </>
+  )
+
+  const classes = cn(
+    'block rounded-[var(--radius-card)] border border-[var(--app-border)] bg-[var(--app-surface)] p-4 shadow-[var(--shadow-card)]',
+    to &&
+      'transition-[border-color,box-shadow] duration-150 hover:border-brand-300 hover:shadow-[var(--shadow-raised)]',
+    className,
+  )
+
+  return to ? (
+    <Link to={to} className={classes}>
+      {body}
+    </Link>
+  ) : (
+    <div className={classes}>{body}</div>
   )
 }

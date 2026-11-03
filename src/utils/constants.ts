@@ -20,6 +20,9 @@ import type {
 /** Kept as an alias so existing component props continue to read naturally. */
 export type ToneName = ToneToken
 
+/** Configurable tones plus the display-only `violet`. Mirrors Badge.tsx. */
+export type BadgeTone = ToneName | 'violet'
+
 /** Selectable tones when configuring a position's badge colour. */
 export const TONE_OPTIONS: { value: ToneToken; label: string }[] = [
   { value: 'brand', label: 'Red' },
@@ -34,14 +37,14 @@ export const TONE_OPTIONS: { value: ToneToken; label: string }[] = [
 interface EnumMeta<T extends string> {
   value: T
   label: string
-  tone: ToneName
+  tone: BadgeTone
   description?: string
 }
 
 export const APPLICANT_STATUSES: EnumMeta<ApplicantStatus>[] = [
-  { value: 'pending', label: 'Pending', tone: 'neutral', description: 'Newly submitted, awaiting first review' },
-  { value: 'screening', label: 'Screening', tone: 'info', description: 'Documents and credentials under review' },
-  { value: 'interview', label: 'Interview', tone: 'warning', description: 'Scheduled for or undergoing interview' },
+  { value: 'pending', label: 'Pending', tone: 'warning', description: 'Newly submitted, awaiting first review' },
+  { value: 'screening', label: 'Screening', tone: 'violet', description: 'Documents and credentials under review' },
+  { value: 'interview', label: 'For Interview', tone: 'info', description: 'Scheduled for or undergoing interview' },
   { value: 'hired', label: 'Hired', tone: 'success', description: 'Onboarded to the personnel roster' },
   { value: 'rejected', label: 'Rejected', tone: 'danger', description: 'Not proceeding' },
   { value: 'archived', label: 'Archived', tone: 'neutral', description: 'Closed and retained per policy' },
@@ -99,7 +102,7 @@ export const EMPLOYMENT_STATUSES: EnumMeta<EmploymentStatus>[] = [
 ]
 
 export const DEPLOYMENT_STATUSES: EnumMeta<DeploymentStatus>[] = [
-  { value: 'pending', label: 'Pending', tone: 'neutral' },
+  { value: 'pending', label: 'Pending', tone: 'warning' },
   { value: 'active', label: 'Active', tone: 'success' },
   { value: 'ended', label: 'Ended', tone: 'neutral' },
   { value: 'transferred', label: 'Transferred', tone: 'info' },
@@ -152,6 +155,16 @@ export const ADMIN_ROLES = [
   'admin',
   'system_administrator',
 ] as const satisfies readonly AppRole[]
+
+/**
+ * Role badge colour: Owner red, administrators amber, every staff role blue.
+ * One function so the users list and the user page cannot disagree.
+ */
+export function roleTone(role: string): BadgeTone {
+  if (role === 'owner') return 'danger'
+  if (role === 'admin' || role === 'system_administrator') return 'warning'
+  return 'info'
+}
 
 /** Which buckets accept which document types (mirrors 0010_storage.sql). */
 export const DOCUMENT_BUCKETS: Record<DocumentType, string> = {

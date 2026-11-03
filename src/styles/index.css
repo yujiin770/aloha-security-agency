@@ -35,14 +35,23 @@
   --color-line: #e5e7eb; /* Border */
 
   /* Semantic ------------------------------------------------------------- */
-  --color-success: #2e7d32;
-  --color-success-soft: #e8f2e9;
-  --color-warning: #f59e0b;
-  --color-warning-soft: #fef3e2;
-  --color-danger: #d32f2f;
-  --color-danger-soft: #fbeaea;
+  --color-success: #16a34a;
+  --color-success-soft: #ecfdf3;
+  --color-warning: #d97706;
+  --color-warning-soft: #fff7e6;
+  --color-danger: #dc2626;
+  --color-danger-soft: #fef2f2;
   --color-info: #2563eb;
-  --color-info-soft: #e8effd;
+  --color-info-soft: #eff6ff;
+  --color-violet: #7c3aed;
+  --color-violet-soft: #f5f3ff;
+
+  /* Chart series — validated for colour-blind separation and contrast against
+     the light and dark surfaces (dataviz palette check). Dark steps live in the
+     `.dark` block below. Text never wears these; only marks do. */
+  --color-chart-1: #2b5c9e;
+  --color-chart-2: #4b8fd6;
+  --color-chart-3: #d97706;
 
   /* Typography ----------------------------------------------------------- */
   /* Manrope is a named fallback only — not self-hosted, so it costs nothing
@@ -62,9 +71,9 @@
      corporate, which is right for dense admin tables. The `soft`/`lift` set is
      for the marketing site, where a card should feel like it lifts toward you
      on hover. They coexist rather than compete. */
-  --shadow-card: 0 1px 2px rgb(17 17 17 / 0.06), 0 1px 3px rgb(17 17 17 / 0.04);
-  --shadow-raised: 0 4px 12px rgb(17 17 17 / 0.1);
-  --shadow-overlay: 0 16px 48px rgb(17 17 17 / 0.24);
+  --shadow-card: 0 1px 2px rgb(15 23 42 / 0.05), 0 1px 3px rgb(15 23 42 / 0.04);
+  --shadow-raised: 0 4px 12px rgb(15 23 42 / 0.08);
+  --shadow-overlay: 0 20px 48px rgb(15 23 42 / 0.2);
 
   --shadow-soft: 0 4px 16px rgb(17 17 17 / 0.06);
   --shadow-lift: 0 16px 40px rgb(17 17 17 / 0.12);
@@ -122,6 +131,65 @@
     color: var(--app-text);
   }
 
+  /* --- Admin console palette ------------------------------------------
+     DashboardLayout and AuthLayout put `.console` on <html> while they are
+     mounted. Inside it the `brand-*` scale is re-pointed from Aloha red to the
+     corporate navy, so every `bg-brand-500`, focus ring and active state in
+     the console turns navy with no component churn — and dialogs and toasts,
+     which portal to <body>, pick it up too. The public site never carries the
+     class, so the storefront keeps the red brand identity. Danger states use
+     `--color-danger`, not `brand`, and stay red everywhere. */
+  .console {
+    --color-brand-50: #eef3f9;
+    --color-brand-100: #d9e3ef;
+    --color-brand-200: #b3c6dd;
+    --color-brand-300: #7f9dc1;
+    --color-brand-400: #3f6491;
+    --color-brand-500: #173b63; /* Primary */
+    --color-brand-600: #102d4d; /* Primary hover */
+    --color-brand-700: #0b2239;
+    --color-brand-800: #08192b;
+    --color-brand-900: #05111e;
+
+    --app-bg: #f5f7fa;
+    --app-border: #e2e8f0;
+    --app-text: #1e293b;
+    --app-text-muted: #64748b;
+    --app-text-subtle: #6b7a90;
+    --app-sidebar-bg: #ffffff;
+    --app-sidebar-text: #475569;
+    --app-sidebar-hover: #f1f5f9;
+    --app-sidebar-active: #eef3f9;
+  }
+
+  /* Navy on near-black is too dim to read as a primary button, so dark mode
+     steps the primary up and lets the lighter steps carry text. */
+  .dark.console {
+    --color-brand-50: #13253b;
+    --color-brand-100: #1a3352;
+    --color-brand-500: #2f62a0;
+    --color-brand-600: #3a70b2;
+    --color-brand-700: #2a5891;
+
+    --app-bg: #0b1120;
+    --app-surface: #111827;
+    --app-surface-raised: #1a2233;
+    --app-border: #263041;
+    --app-text: #e5e9f0;
+    --app-text-muted: #9aa6b8;
+    --app-text-subtle: #7d8899;
+    --app-sidebar-bg: #0f172a;
+    --app-sidebar-text: #b4bfcf;
+    --app-sidebar-hover: #1a2436;
+    --app-sidebar-active: #1a2d47;
+  }
+
+  .dark {
+    --color-chart-1: #3460a8;
+    --color-chart-2: #5d98db;
+    --color-chart-3: #c27a22;
+  }
+
   * {
     border-color: var(--app-border);
   }
@@ -155,6 +223,14 @@
     outline: 2px solid var(--color-brand-500);
     outline-offset: 2px;
     border-radius: 4px;
+  }
+
+  /* Form controls show focus as a border plus a soft ring (set in Field.tsx),
+     which reads better inside a bordered box than an offset outline. */
+  input:not([type='checkbox']):not([type='radio']):focus-visible,
+  select:focus-visible,
+  textarea:focus-visible {
+    outline: none;
   }
 
   ::selection {
@@ -195,8 +271,18 @@
     position: sticky;
     top: 0;
     z-index: 10;
-    background: var(--app-surface);
+    background: var(--app-bg);
     box-shadow: inset 0 -1px 0 var(--app-border);
+  }
+
+  /* Native selects get the same chevron in every browser. The arrow is drawn
+     in slate so it reads in both themes. */
+  .select-chevron {
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0.625rem center;
+    background-size: 1rem;
   }
 }
 

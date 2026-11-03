@@ -1,11 +1,22 @@
 import { useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Download, Printer, RefreshCw, TrendingUp } from 'lucide-react'
+import {
+  CheckCircle2,
+  Download,
+  FileStack,
+  Hourglass,
+  Percent,
+  Printer,
+  RefreshCw,
+  TrendingUp,
+} from 'lucide-react'
 import { PageHeader } from '@/components/PageHeader'
 import { Card, CardHeader } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Field, Input } from '@/components/ui/Field'
-import { EmptyState, ErrorState, Skeleton } from '@/components/ui/Feedback'
+import { EmptyState, ErrorState, Skeleton, StatCard } from '@/components/ui/Feedback'
+import { MonthlyOutcomeChart } from '@/components/charts/MonthlyOutcomeChart'
+import { bucketByMonth } from '@/components/charts/monthBuckets'
 import { useToast } from '@/components/ui/Toast'
 import { Can } from '@/app/guards'
 import { queryKeys } from '@/lib/queryKeys'
@@ -68,13 +79,10 @@ export default function ReportsPage() {
     )
   }, [funnel.data])
 
-  const byMonth = useMemo(() => {
-    const map = new Map<string, number>()
-    for (const row of funnel.data ?? []) {
-      map.set(row.period_month, (map.get(row.period_month) ?? 0) + row.total)
-    }
-    return [...map.entries()].sort(([a], [b]) => a.localeCompare(b))
-  }, [funnel.data])
+  const byMonth = useMemo(
+    () => bucketByMonth(funnel.data ?? [], from, to),
+    [funnel.data, from, to],
+  )
 
   // Keyed by the position name the view joins in, so a renamed position shows
   // its current name without needing a separate lookup.
@@ -90,7 +98,6 @@ export default function ReportsPage() {
     return [...map.entries()].sort((a, b) => b[1].total - a[1].total)
   }, [funnel.data])
 
-  const peakMonth = Math.max(1, ...byMonth.map(([, count]) => count))
   const hireRate = totals.total === 0 ? 0 : (totals.hired / totals.total) * 100
 
   return (
@@ -167,25 +174,35 @@ export default function ReportsPage() {
       ) : (
         <>
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            {[
-              ['Applications received', formatNumber(totals.total)],
-              ['Hired', formatNumber(totals.hired)],
-              ['In progress', formatNumber(totals.inProgress)],
-              ['Hire rate', formatPercent(hireRate)],
-            ].map(([label, value]) => (
-              <Card key={label}>
-                <p className="text-sm font-medium text-[var(--app-text-muted)]">
-                  {label}
-                </p>
-                {funnel.isLoading ? (
-                  <Skeleton className="mt-2 h-9 w-24" />
-                ) : (
-                  <p className="mt-1.5 text-3xl font-semibold tracking-tight text-[var(--app-text)] tabular-nums">
-                    {value}
-                  </p>
-                )}
-              </Card>
-            ))}
+            <StatCard
+              icon={FileStack}
+              label="Applications received"
+              value={formatNumber(totals.total)}
+              isLoading={funnel.isLoading}
+            />
+            <StatCard
+              icon={CheckCircle2}
+              tone="success"
+              label="Hired"
+              value={formatNumber(totals.hired)}
+              isLoading={funnel.isLoading}
+            />
+            <StatCard
+              icon={Hourglass}
+              tone="warning"
+              label="In progress"
+              value={formatNumber(totals.inProgress)}
+              caption="Pending, screening or interview"
+              isLoading={funnel.isLoading}
+            />
+            <StatCard
+              icon={Percent}
+              tone="info"
+              label="Hire rate"
+              value={formatPercent(hireRate)}
+              caption="Hired ÷ applications received"
+              isLoading={funnel.isLoading}
+            />
           </div>
 
           <div className="mt-6 grid gap-6 lg:grid-cols-2">
@@ -193,6 +210,7 @@ export default function ReportsPage() {
             <Card padded={false}>
               <CardHeader
                 title="Applications by month"
+                description="Stacked by outcome"
                 icon={<TrendingUp className="h-4 w-4" aria-hidden="true" />}
                 actions={
                   <Button
@@ -203,10 +221,14 @@ export default function ReportsPage() {
                     onClick={() =>
                       downloadCsv(
                         'applications-by-month',
-                        byMonth.map(([month, count]) => ({ month, count })),
+                        byMonth as unknown as Record<string, unknown>[],
                         [
                           { key: 'month', header: 'Month' },
-                          { key: 'count', header: 'Applications' },
+                          { key: 'total', header: 'Applications' },
+                          { key: 'hired', header: 'Hired' },
+                          { key: 'inProgress', header: 'In progress' },
+                          { key: 'rejected', header: 'Rejected' },
+                          { key: 'archived', header: 'Archived' },
                         ],
                       )
                     }
@@ -218,40 +240,12 @@ export default function ReportsPage() {
               <div className="p-5">
                 {funnel.isLoading ? (
                   <Skeleton className="h-52" />
-                ) : byMonth.length === 0 ? (
-                  <EmptyState
-                    title="No data for this period"
-                    description="Try widening the date range."
-                    className="py-8"
-                  />
                 ) : (
-                  <div
-                    className="flex h-52 items-end gap-1.5"
-                    role="img"
-                    aria-label={`Applications per month from ${from} to ${to}`}
-                  >
-                    {byMonth.map(([month, count]) => (
-                      <div
-                        key={month}
-                        className="group flex flex-1 flex-col items-center gap-1.5"
-                      >
-                        <span className="text-[10px] font-medium text-[var(--app-text-muted)] tabular-nums opacity-0 transition-opacity group-hover:opacity-100">
-                          {count}
-                        </span>
-                        <div
-                          className="w-full rounded-t bg-brand-500 transition-colors group-hover:bg-brand-600"
-                          style={{
-                            height: `${Math.max((count / peakMonth) * 100, 2)}%`,
-                          }}
-                        />
-                        <span className="text-[10px] whitespace-nowrap text-[var(--app-text-subtle)]">
-                          {new Date(month).toLocaleDateString('en-PH', {
-                            month: 'short',
-                          })}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
+                  <MonthlyOutcomeChart
+                    data={byMonth}
+                    height={208}
+                    label={`Applications per month from ${from} to ${to}, stacked by outcome`}
+                  />
                 )}
               </div>
             </Card>
@@ -265,7 +259,7 @@ export default function ReportsPage() {
                 ) : byPosition.length === 0 ? (
                   <EmptyState title="No data for this period" className="py-8" />
                 ) : (
-                  <ul className="space-y-3">
+                  <ul className="space-y-3.5">
                     {byPosition.map(([position, stats]) => {
                       const pct =
                         totals.total === 0 ? 0 : (stats.total / totals.total) * 100
@@ -282,8 +276,8 @@ export default function ReportsPage() {
                           </div>
                           <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-[var(--app-border)]">
                             <div
-                              className="h-full rounded-full bg-brand-500"
-                              style={{ width: `${pct}%` }}
+                              className="h-full rounded-full"
+                              style={{ width: `${pct}%`, background: 'var(--color-chart-1)' }}
                             />
                           </div>
                         </li>
@@ -341,12 +335,12 @@ export default function ReportsPage() {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="bg-[var(--app-bg)]">
-                      {['Branch', 'Location', 'Required', 'Deployed', 'Vacancies', 'Fill rate'].map(
+                      {['Facility', 'Location', 'Required', 'Deployed', 'Vacancies', 'Fill rate'].map(
                         (header) => (
                           <th
                             key={header}
                             scope="col"
-                            className="px-4 py-2.5 text-left text-xs font-semibold text-[var(--app-text-muted)] uppercase"
+                            className="px-4 py-2.5 text-left text-[11px] font-semibold tracking-wider text-[var(--app-text-muted)] uppercase"
                           >
                             {header}
                           </th>

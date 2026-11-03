@@ -5,7 +5,7 @@ import {
   employmentStatusMeta,
   shiftMeta,
 } from '@/utils/constants'
-import type { ToneName } from '@/utils/constants'
+import type { BadgeTone } from '@/utils/constants'
 import { humanize } from '@/utils/format'
 
 /**
@@ -107,7 +107,7 @@ export function statusBadge(
   table: string,
   key: string,
   value: string,
-): { label: string; tone: ToneName } | null {
+): { label: string; tone: BadgeTone } | null {
   if (key === 'shift') {
     const meta = shiftMeta(value as never)
     if (meta) return { label: meta.label, tone: meta.tone }

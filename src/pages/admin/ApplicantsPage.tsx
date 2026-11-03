@@ -220,7 +220,7 @@ export default function ApplicantsPage() {
             }}
             placeholder="Search name, reference, email or phone…"
             aria-label="Search applicants"
-            className="h-10 w-full rounded-lg border border-[var(--app-border)] bg-[var(--app-surface)] pl-9 text-sm text-[var(--app-text)] placeholder:text-[var(--app-text-subtle)]"
+            className="h-10 w-full rounded-lg border border-[var(--app-border)] bg-[var(--app-surface)] pr-3 pl-9 text-sm text-[var(--app-text)] shadow-[0_1px_1px_rgb(15_23_42/0.03)] transition-[border-color,box-shadow] placeholder:text-[var(--app-text-subtle)] focus:border-brand-500 focus:ring-[3px] focus:ring-brand-500/15 focus:outline-none"
           />
         </div>
 

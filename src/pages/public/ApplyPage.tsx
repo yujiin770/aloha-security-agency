@@ -367,34 +367,80 @@ export default function ApplyPage() {
       )}
 
       {/* Stepper */}
-      <ol className="mt-8 flex flex-wrap gap-1" aria-label="Application progress">
-        {STEPS.map((s, index) => (
-          <li key={s.id} className="flex flex-1 items-center gap-2">
-            <button
-              type="button"
-              // Backwards navigation only — jumping ahead would skip validation.
-              onClick={() => index < step && setStep(index)}
-              disabled={index > step}
-              aria-current={index === step ? 'step' : undefined}
-              className={cn(
-                'flex h-1.5 w-full rounded-full transition-colors',
-                index < step && 'bg-laurel-500',
-                index === step && 'bg-brand-500',
-                index > step && 'bg-[var(--app-border)]',
-                index < step && 'cursor-pointer',
-              )}
-            >
-              <span className="sr-only">
-                {s.title}
-                {index < step ? ' (completed)' : index === step ? ' (current)' : ''}
-              </span>
-            </button>
-          </li>
-        ))}
-      </ol>
-      <p className="mt-2 text-xs font-medium text-[var(--app-text-muted)]">
-        Step {step + 1} of {STEPS.length} — {STEPS[step]!.title}
-      </p>
+      <nav aria-label="Application progress" className="mt-8">
+        <div className="flex items-baseline justify-between gap-3">
+          <p className="text-sm font-semibold text-[var(--app-text)]">
+            {STEPS[step]!.title}
+          </p>
+          <p className="text-xs font-medium tabular-nums text-[var(--app-text-muted)]">
+            Step {step + 1} of {STEPS.length}
+          </p>
+        </div>
+
+        {/* Overall progress, then the individual steps. */}
+        <div
+          className="mt-3 h-1.5 overflow-hidden rounded-full bg-[var(--app-border)]"
+          role="progressbar"
+          aria-valuemin={1}
+          aria-valuemax={STEPS.length}
+          aria-valuenow={step + 1}
+          aria-label="Application progress"
+        >
+          <div
+            className="h-full rounded-full bg-brand-500 transition-[width] duration-300 ease-out"
+            style={{ width: `${((step + 1) / STEPS.length) * 100}%` }}
+          />
+        </div>
+
+        <ol className="mt-4 grid grid-cols-6 gap-1">
+          {STEPS.map((s, index) => {
+            const done = index < step
+            const current = index === step
+            return (
+              <li key={s.id} className="min-w-0">
+                <button
+                  type="button"
+                  // Backwards navigation only — jumping ahead would skip validation.
+                  onClick={() => done && setStep(index)}
+                  disabled={index > step}
+                  aria-current={current ? 'step' : undefined}
+                  className={cn(
+                    'group flex w-full flex-col items-center gap-1.5 rounded-lg py-1 text-center',
+                    done && 'cursor-pointer',
+                    index > step && 'cursor-default',
+                  )}
+                >
+                  <span
+                    className={cn(
+                      'flex h-7 w-7 items-center justify-center rounded-full text-xs font-semibold transition-colors',
+                      done && 'bg-laurel-500 text-white group-hover:bg-laurel-600',
+                      current && 'bg-brand-500 text-white ring-4 ring-brand-500/15',
+                      index > step &&
+                        'border border-[var(--app-border)] bg-[var(--app-surface)] text-[var(--app-text-subtle)]',
+                    )}
+                    aria-hidden="true"
+                  >
+                    {done ? <Check className="h-3.5 w-3.5" strokeWidth={3} /> : index + 1}
+                  </span>
+                  <span
+                    className={cn(
+                      'hidden w-full truncate text-[11px] font-medium sm:block',
+                      current ? 'text-[var(--app-text)]' : 'text-[var(--app-text-subtle)]',
+                    )}
+                    aria-hidden="true"
+                  >
+                    {s.title}
+                  </span>
+                  <span className="sr-only">
+                    {s.title}
+                    {done ? ' (completed)' : current ? ' (current)' : ''}
+                  </span>
+                </button>
+              </li>
+            )
+          })}
+        </ol>
+      </nav>
 
       <form onSubmit={form.handleSubmit(onSubmit)} className="mt-6" noValidate>
         <Card>
