@@ -797,6 +797,11 @@ export type Database = {
         Args: { p_email: string }
         Returns: EmailEligibility[]
       }
+      /** 0025. ISO date (yyyy-mm-dd), or null if never rejected / not staff. */
+      applicant_reapply_date: {
+        Args: { p_applicant_id: string }
+        Returns: string | null
+      }
       get_dashboard_stats: { Args: Record<string, never>; Returns: DashboardStats }
       promote_applicant_to_personnel: {
         Args: { p_applicant_id: string; p_date_hired?: string; p_rank_id?: string }

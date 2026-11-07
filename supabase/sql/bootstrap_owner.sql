@@ -13,7 +13,7 @@
 do $$
 declare
   v_user_id uuid;
-  v_email   text := 'owner@alohasecurity.ph';  -- <<< EDIT ME
+  v_email   text := 'eujinjae@gmail.com';  -- <<< EDIT ME
 begin
   select id into v_user_id from auth.users where lower(email) = lower(v_email);
 

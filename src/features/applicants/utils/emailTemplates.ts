@@ -17,7 +17,7 @@
  */
 
 import { APP_NAME, SUPPORT_EMAIL } from '@/lib/env'
-import { formatDateTime } from '@/utils/format'
+import { formatDate, formatDateTime } from '@/utils/format'
 import type { ApplicantRow, ApplicantStatus } from '@/types/database.types'
 
 export interface ApplicantEmail {
@@ -112,6 +112,15 @@ export function buildStatusEmail(
     'first_name' | 'last_name' | 'reference_no' | 'interview_at'
   >,
   status: ApplicantStatus,
+  options: {
+    /**
+     * Rejection only: the date (yyyy-mm-dd) this email address may apply again,
+     * from applicant_reapply_date() (0025). When unknown the email falls back
+     * to the default six-month wording rather than naming a date that might
+     * not match what the application form enforces.
+     */
+    reapplyDate?: string | null
+  } = {},
 ): ApplicantEmail | null {
   const name = esc(applicant.first_name)
   const ref = applicant.reference_no
@@ -194,7 +203,13 @@ export function buildStatusEmail(
         ].join('\n'),
       }
 
-    case 'rejected':
+    case 'rejected': {
+      const reapplyOn = options.reapplyDate ? formatDate(options.reapplyDate) : null
+      const reapplyLine = reapplyOn
+        ? `You are welcome to apply again for future openings using this same email address from ${reapplyOn}. Applications from this address will not be accepted before that date.`
+        : 'You are welcome to apply again for future openings using this same email address six months from the date of this notice. Applications from this address will not be accepted before then.'
+      const hrLine = `If you have questions about your application, please contact HR at ${SUPPORT_EMAIL}.`
+
       return {
         template: 'applicant_rejected',
         subject: `Update on your application — ${ref}`,
@@ -207,8 +222,12 @@ export function buildStatusEmail(
             p(
               'After careful consideration, we will not be moving forward with your application on this occasion. This decision reflects the requirements of the roles we are currently filling and is not a judgement of your capability.',
             ) +
+            `<div style="margin:0 0 14px;padding:14px 16px;background:#f1f5f9;border-left:3px solid ${BRAND};border-radius:6px;">
+               <div style="font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:${MUTED};">Applying again</div>
+               <div style="margin-top:4px;font-size:14px;line-height:1.65;color:#334155;">${esc(reapplyLine)}</div>
+             </div>` +
             p(
-              'Your details remain on file, and you are welcome to apply again for future openings.',
+              `If you have questions about your application, please contact HR at <a href="mailto:${esc(SUPPORT_EMAIL)}" style="color:${BRAND};">${esc(SUPPORT_EMAIL)}</a>.`,
             ),
           ref,
         ),
@@ -219,10 +238,13 @@ export function buildStatusEmail(
           '',
           'After careful consideration, we will not be moving forward with your application on this occasion. This decision reflects the requirements of the roles we are currently filling and is not a judgement of your capability.',
           '',
-          'Your details remain on file, and you are welcome to apply again for future openings.',
+          reapplyLine,
+          '',
+          hrLine,
           textFooter(ref),
         ].join('\n'),
       }
+    }
 
     case 'hired': {
       // No start date, salary, or reporting branch here. Those are terms of

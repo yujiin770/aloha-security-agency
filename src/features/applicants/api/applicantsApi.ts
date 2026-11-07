@@ -354,7 +354,9 @@ export async function notifyApplicantOfStatus(
   applicant: ApplicantRow,
   status: ApplicantStatus,
 ): Promise<NotifyOutcome> {
-  const email = buildStatusEmail(applicant, status)
+  const email = buildStatusEmail(applicant, status, {
+    reapplyDate: status === 'rejected' ? await fetchReapplyDate(applicant.id) : null,
+  })
   if (!email) return { state: 'not-applicable' }
 
   try {
@@ -390,6 +392,22 @@ export async function notifyApplicantOfStatus(
     return { state: 'sent' }
   } catch (err) {
     return { state: 'failed', reason: errorText(err) }
+  }
+}
+
+/**
+ * The date a rejected applicant may apply again, as the database computes it
+ * (0025). Null on any failure — the email then uses its generic wording, and a
+ * missing date must never stop the rejection notice going out.
+ */
+async function fetchReapplyDate(applicantId: string): Promise<string | null> {
+  try {
+    const { data, error } = await supabase.rpc('applicant_reapply_date', {
+      p_applicant_id: applicantId,
+    })
+    return error ? null : (data ?? null)
+  } catch {
+    return null
   }
 }
 
