@@ -76,6 +76,64 @@ export async function getPersonnelDeployments(id: string): Promise<DeploymentRow
   return data ?? []
 }
 
+/** Fields staff enter when adding a guard who was hired before the system existed. */
+export type NewPersonnelInput = Pick<
+  PersonnelRow,
+  | 'first_name'
+  | 'middle_name'
+  | 'last_name'
+  | 'suffix'
+  | 'email'
+  | 'phone'
+  | 'birth_date'
+  | 'sex'
+  | 'position_id'
+  | 'rank_id'
+  | 'date_hired'
+  | 'emergency_contact_name'
+  | 'emergency_contact_phone'
+  | 'sss_no'
+  | 'philhealth_no'
+  | 'pagibig_no'
+  | 'tin_no'
+  | 'security_license_no'
+  | 'security_license_expiry'
+> & {
+  /** Their existing employee number, if they have one. Generated when omitted. */
+  employee_no?: string | null
+}
+
+/**
+ * Adds an already-employed guard straight to the roster, with no applicant
+ * behind them. Hiring an applicant still goes through
+ * promote_applicant_to_personnel(); this is for the people who were on the
+ * payroll before the system was. RLS (personnel_insert) limits it to
+ * administrators and HR.
+ */
+export async function createPersonnel(input: NewPersonnelInput): Promise<PersonnelRow> {
+  const { employee_no, ...rest } = input
+  const { data, error } = await supabase
+    .from('personnel')
+    .insert({
+      ...rest,
+      ...(employee_no?.trim() ? { employee_no: employee_no.trim() } : {}),
+      email: rest.email?.trim().toLowerCase() || null,
+      applicant_id: null,
+      profile_id: null,
+      date_separated: null,
+      employment_status: 'active',
+      photo_path: null,
+      created_by: (await supabase.auth.getUser()).data.user?.id ?? null,
+    })
+    .select()
+    .single()
+
+  // A duplicate employee number maps to its own sentence via
+  // personnel_employee_no_unique in lib/errors.ts.
+  if (error) throw toAppError(error, 'Could not add that personnel record.')
+  return data
+}
+
 export async function updatePersonnel(
   id: string,
   patch: Partial<PersonnelRow>,

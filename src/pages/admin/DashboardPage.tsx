@@ -57,7 +57,10 @@ function greeting() {
 }
 
 export default function DashboardPage() {
-  const { user, isAdmin } = useAuth()
+  const { user, isAdmin, hasRole } = useAuth()
+  // The activity feed is Owner and Administrator only — System Administrator
+  // and staff roles are excluded, matching activity_logs_select (0024).
+  const canSeeActivity = hasRole('owner', 'admin')
 
   const stats = useQuery({
     queryKey: queryKeys.reports.dashboard(),
@@ -81,7 +84,7 @@ export default function DashboardPage() {
   const activity = useQuery({
     queryKey: queryKeys.audit.activity({ limit: 12 }),
     queryFn: () => listActivity(12),
-    enabled: isAdmin,
+    enabled: canSeeActivity,
   })
 
   const firstName = user?.profile.first_name ?? user?.profile.full_name.split(' ')[0]
@@ -312,68 +315,70 @@ export default function DashboardPage() {
           </Card>
 
           {isAdmin && (
-            <div className="mt-6 grid gap-6 xl:grid-cols-3">
+            <div className={cn('mt-6 grid gap-6', canSeeActivity && 'xl:grid-cols-3')}>
               {/* Activity ---------------------------------------------------- */}
-              <Card padded={false} className="xl:col-span-2">
-                <CardHeader
-                  title="Recent activity"
-                  description="Latest actions across the console"
-                  icon={<Clock className="h-4 w-4" aria-hidden="true" />}
-                  actions={
-                    <Link
-                      to="/admin/audit"
-                      className="text-sm font-medium text-brand-600 hover:underline dark:text-brand-300"
-                    >
-                      Audit logs
-                    </Link>
-                  }
-                />
-                <div className="scrollbar-slim max-h-[24rem] overflow-y-auto">
-                  {activity.isLoading ? (
-                    <div className="space-y-3 p-5">
-                      {Array.from({ length: 5 }).map((_, i) => (
-                        <Skeleton key={i} className="h-8" />
-                      ))}
-                    </div>
-                  ) : activity.isError ? (
-                    <ErrorState
-                      message={errorMessage(activity.error)}
-                      onRetry={() => void activity.refetch()}
-                      className="py-10"
-                    />
-                  ) : (activity.data?.length ?? 0) === 0 ? (
-                    <EmptyState
-                      title="Nothing yet"
-                      description="Hires, deployments and other actions will show up here."
-                      className="py-10"
-                    />
-                  ) : (
-                    <ol className="relative px-5 py-4">
-                      {activity.data!.map((entry, index) => (
-                        <li key={entry.id} className="relative flex gap-3 pb-4 last:pb-0">
-                          {/* Timeline rail */}
-                          {index < activity.data!.length - 1 && (
+              {canSeeActivity && (
+                <Card padded={false} className="xl:col-span-2">
+                  <CardHeader
+                    title="Recent activity"
+                    description="Latest actions across the console"
+                    icon={<Clock className="h-4 w-4" aria-hidden="true" />}
+                    actions={
+                      <Link
+                        to="/admin/audit"
+                        className="text-sm font-medium text-brand-600 hover:underline dark:text-brand-300"
+                      >
+                        Audit logs
+                      </Link>
+                    }
+                  />
+                  <div className="scrollbar-slim max-h-[24rem] overflow-y-auto">
+                    {activity.isLoading ? (
+                      <div className="space-y-3 p-5">
+                        {Array.from({ length: 5 }).map((_, i) => (
+                          <Skeleton key={i} className="h-8" />
+                        ))}
+                      </div>
+                    ) : activity.isError ? (
+                      <ErrorState
+                        message={errorMessage(activity.error)}
+                        onRetry={() => void activity.refetch()}
+                        className="py-10"
+                      />
+                    ) : (activity.data?.length ?? 0) === 0 ? (
+                      <EmptyState
+                        title="Nothing yet"
+                        description="Hires, deployments and other actions will show up here."
+                        className="py-10"
+                      />
+                    ) : (
+                      <ol className="relative px-5 py-4">
+                        {activity.data!.map((entry, index) => (
+                          <li key={entry.id} className="relative flex gap-3 pb-4 last:pb-0">
+                            {/* Timeline rail */}
+                            {index < activity.data!.length - 1 && (
+                              <span
+                                className="absolute top-4 bottom-0 left-[5px] w-px bg-[var(--app-border)]"
+                                aria-hidden="true"
+                              />
+                            )}
                             <span
-                              className="absolute top-4 bottom-0 left-[5px] w-px bg-[var(--app-border)]"
+                              className="relative mt-1.5 h-[11px] w-[11px] shrink-0 rounded-full border-2 border-brand-500 bg-[var(--app-surface)] dark:border-brand-300"
                               aria-hidden="true"
                             />
-                          )}
-                          <span
-                            className="relative mt-1.5 h-[11px] w-[11px] shrink-0 rounded-full border-2 border-brand-500 bg-[var(--app-surface)] dark:border-brand-300"
-                            aria-hidden="true"
-                          />
-                          <div className="min-w-0">
-                            <p className="text-sm text-[var(--app-text)]">{entry.summary}</p>
-                            <p className="mt-0.5 text-xs text-[var(--app-text-subtle)]">
-                              <time dateTime={entry.created_at}>{formatRelative(entry.created_at)}</time>
-                            </p>
-                          </div>
-                        </li>
-                      ))}
-                    </ol>
-                  )}
-                </div>
-              </Card>
+                            <div className="min-w-0">
+                              <p className="text-sm text-[var(--app-text)]">{entry.summary}</p>
+                              <p className="mt-0.5 text-xs text-[var(--app-text-subtle)]">
+                                <time dateTime={entry.created_at}>{formatRelative(entry.created_at)}</time>
+                              </p>
+                            </div>
+                          </li>
+                        ))}
+                      </ol>
+                    )}
+                  </div>
+                </Card>
+              )}
 
               <SystemHealth statsUpdatedAt={stats.dataUpdatedAt} />
             </div>

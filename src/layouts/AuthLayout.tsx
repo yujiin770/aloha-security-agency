@@ -12,23 +12,23 @@ export function AuthLayout() {
     <div className="grid min-h-dvh lg:grid-cols-2">
       {/* BRAND PANEL - NOW ON THE LEFT (Hidden on mobile) */}
       <div
-        className="relative hidden flex-col justify-between overflow-hidden bg-brand-700 p-12 lg:flex"
+        className="relative hidden flex-col justify-between overflow-hidden bg-ink p-12 lg:flex"
         aria-hidden="true"
       >
        
         <div className="relative">
-          <ShieldCheck className="h-10 w-10 text-white/90" />
+          <ShieldCheck className="h-10 w-10 text-brand-500" />
           <h2 className="mt-6 max-w-md text-3xl leading-tight font-semibold text-white">
             Recruitment &amp; Deployment Management
           </h2>
-          <p className="mt-4 max-w-md text-sm leading-relaxed text-white/70">
+          <p className="mt-4 max-w-md text-sm leading-relaxed text-neutral-400">
             A single operational record for every applicant, every guard and
             every post — from first application through deployment and end of
             duty.
           </p>
         </div>
 
-        <dl className="relative grid grid-cols-3 gap-6 border-t border-white/10 pt-8">
+        <dl className="relative grid grid-cols-3 gap-6 border-t border-neutral-800 pt-8">
           {[
             ['Vetted', 'Every applicant screened'],
             ['Tracked', 'Full deployment history'],
@@ -36,7 +36,7 @@ export function AuthLayout() {
           ].map(([term, detail]) => (
             <div key={term}>
               <dt className="text-sm font-semibold text-white">{term}</dt>
-              <dd className="mt-1 text-xs text-white/55">{detail}</dd>
+              <dd className="mt-1 text-xs text-neutral-500">{detail}</dd>
             </div>
           ))}
         </dl>

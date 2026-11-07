@@ -103,7 +103,8 @@ export default function BranchesPage() {
   // realistically in the dozens.
   const [search, setSearch] = useState('')
   const debouncedSearch = useDebouncedValue(search, 250)
-  const [status, setStatus] = useState<'active' | 'inactive' | ''>('')
+  // Active facilities by default; "All statuses" brings the inactive ones back.
+  const [status, setStatus] = useState<'active' | 'inactive' | ''>('active')
   const [province, setProvince] = useState('')
   const [staffingFilter, setStaffingFilter] = useState<'understaffed' | 'filled' | ''>('')
 
@@ -240,12 +241,15 @@ export default function BranchesPage() {
     // actually matters for the staffing filter.
   }, [branches.data, staffing.data, debouncedSearch, status, province, staffingFilter]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const activeFilterCount = [status, province, staffingFilter].filter(Boolean).length
+  // `active` is the default view, so it does not count as a filter.
+  const activeFilterCount = [status === 'active' ? '' : status, province, staffingFilter].filter(
+    Boolean,
+  ).length
   const isFiltered = activeFilterCount > 0 || debouncedSearch.trim().length > 0
 
   function clearFilters() {
     setSearch('')
-    setStatus('')
+    setStatus('active')
     setProvince('')
     setStaffingFilter('')
   }

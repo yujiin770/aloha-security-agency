@@ -128,12 +128,13 @@ export default function AccreditationsPage() {
       header: 'Credential',
       render: (row) => (
         <div className="flex min-w-0 items-center gap-3">
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded border border-[var(--app-border)] bg-white">
+          <span className="flex h-16 w-20 shrink-0 items-center justify-center overflow-hidden rounded-md border border-[var(--app-border)] bg-white">
             {row.logo_path ? (
               <img
                 src={mediaUrl(row.logo_path) ?? ''}
                 alt=""
                 className="h-full w-full object-contain p-1"
+                loading="lazy"
               />
             ) : (
               <Award

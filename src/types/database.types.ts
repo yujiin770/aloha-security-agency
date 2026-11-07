@@ -730,7 +730,11 @@ export type Database = {
       applicant_status_history: TableDef<ApplicantStatusHistoryRow>
       personnel: TableDef<
         PersonnelRow,
-        Omit<PersonnelRow, 'id' | 'created_at' | 'updated_at'> & { id?: string }
+        // employee_no has a database default since 0024.
+        Omit<PersonnelRow, 'id' | 'employee_no' | 'created_at' | 'updated_at'> & {
+          id?: string
+          employee_no?: string
+        }
       >
       deployments: TableDef<
         DeploymentRow,

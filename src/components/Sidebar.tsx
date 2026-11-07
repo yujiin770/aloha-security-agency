@@ -246,7 +246,7 @@ export function Sidebar({
     <>
       {mobileOpen && (
         <div
-          className="fixed inset-0 z-40 bg-slate-950/50 backdrop-blur-[2px] lg:hidden"
+          className="fixed inset-0 z-40 bg-ink/60 lg:hidden"
           onClick={onClose}
           aria-hidden="true"
         />
@@ -254,7 +254,7 @@ export function Sidebar({
 
       <aside
         className={cn(
-          'fixed inset-y-0 left-0 z-50 flex w-64 flex-col border-r border-[var(--app-border)] bg-[var(--app-sidebar-bg)]',
+          'sidebar-dark fixed inset-y-0 left-0 z-50 flex w-64 flex-col bg-[var(--app-sidebar-bg)]',
           'transition-[transform,width] duration-200 ease-out',
           'lg:sticky lg:top-0 lg:h-dvh lg:translate-x-0',
           collapsed && 'lg:w-[4.5rem]',
@@ -269,18 +269,18 @@ export function Sidebar({
           )}
         >
           <Link to="/admin" onClick={onClose} className={cn('min-w-0', hideWhenCollapsed)}>
-            <Logo size="sm" />
+            <Logo inverted size="sm" />
           </Link>
           {collapsed && (
             <Link to="/admin" aria-label="Dashboard" className="hidden lg:block">
-              <Logo size="sm" showWordmark={false} />
+              <Logo inverted size="sm" showWordmark={false} />
             </Link>
           )}
           <Button
             variant="ghost"
             size="icon"
             onClick={onClose}
-            className="lg:hidden"
+            className="text-neutral-400 lg:hidden"
             aria-label="Close navigation"
           >
             <X className="h-5 w-5" aria-hidden="true" />
@@ -322,7 +322,7 @@ export function Sidebar({
                           'group relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
                           collapsed && 'lg:justify-center lg:px-0',
                           active
-                            ? 'bg-[var(--app-sidebar-active)] text-brand-600 dark:text-brand-300'
+                            ? 'bg-[var(--app-sidebar-active)] text-white'
                             : 'text-[var(--app-sidebar-text)] hover:bg-[var(--app-sidebar-hover)] hover:text-[var(--app-text)]',
                         )}
                       >
@@ -330,7 +330,7 @@ export function Sidebar({
                             by shape as well as by colour. */}
                         {active && (
                           <span
-                            className="absolute inset-y-1.5 left-0 w-[3px] rounded-r-full bg-brand-500 dark:bg-brand-300"
+                            className="absolute inset-y-1.5 left-0 w-[3px] rounded-r-full bg-white/80"
                             aria-hidden="true"
                           />
                         )}

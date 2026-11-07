@@ -26,7 +26,7 @@ export default function UserDetailPage() {
   const { id = '' } = useParams()
   const toast = useToast()
   const qc = useQueryClient()
-  const { user: currentUser, hasRole } = useAuth()
+  const { user: currentUser } = useAuth()
 
   const [deactivateOpen, setDeactivateOpen] = useState(false)
 
@@ -92,7 +92,8 @@ export default function UserDetailPage() {
   // Configuration shows through here rather than drifting from a constant.
   const assignableRoles = (roles.data ?? [])
     .filter((role) => role.is_assignable)
-    .filter((role) => role.key !== 'owner' || hasRole('owner'))
+    // The Owner is assigned in Supabase only, never from the console (0024).
+    .filter((role) => role.key !== 'owner' && role.inherits_from !== 'owner')
 
   return (
     <>

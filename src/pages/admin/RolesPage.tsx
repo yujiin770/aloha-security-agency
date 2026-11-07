@@ -43,7 +43,7 @@ import { ADMIN_ROLES } from '@/utils/constants'
 
 /** The built-ins a custom role may borrow its database privileges from. */
 const BASE_ROLES: { value: AppRole; label: string; blurb: string }[] = [
-  { value: 'owner', label: 'Owner', blurb: 'Everything, including minting other owners.' },
+  { value: 'owner', label: 'Owner', blurb: 'Everything. There is only one Owner account.' },
   { value: 'admin', label: 'Administrator', blurb: 'Full read and write across the system.' },
   {
     value: 'system_administrator',
@@ -601,7 +601,11 @@ export default function RolesPage() {
           >
             <Select
               {...createForm.register('inherits_from')}
-              options={BASE_ROLES.map((r) => ({ value: r.value, label: r.label }))}
+              // No role may be based on Owner: there is exactly one Owner (0024).
+              options={BASE_ROLES.filter((r) => r.value !== 'owner').map((r) => ({
+                value: r.value,
+                label: r.label,
+              }))}
             />
           </Field>
 

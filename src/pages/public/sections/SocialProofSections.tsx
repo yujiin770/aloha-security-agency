@@ -277,21 +277,26 @@ export function AccreditationsSection() {
       ) : (
         <RevealGroup
           as="ul"
-          className="mt-14 grid gap-4 sm:grid-cols-2 lg:grid-cols-4"
+          className="mt-14 grid gap-6 sm:grid-cols-2 lg:grid-cols-3"
         >
           {accreditations.map((item) => (
             <RevealItem as="li" key={item.id}>
               <MarketingCard padding="md" interactive={false} className="h-full text-center">
-                <span className="mx-auto flex h-14 w-14 items-center justify-center overflow-hidden rounded-xl bg-canvas">
+                {/* A certificate has to be legible, so it gets a real frame
+                    rather than an icon-sized chip. The original upload is
+                    served untouched, so the larger frame shows its full
+                    resolution. */}
+                <span className="flex aspect-[4/3] w-full items-center justify-center overflow-hidden rounded-xl border border-[var(--app-border)] bg-white">
                   {item.logo_path ? (
                     <img
                       src={mediaUrl(item.logo_path) ?? ''}
                       alt=""
                       loading="lazy"
-                      className="h-full w-full object-contain p-1.5"
+                      decoding="async"
+                      className="h-full w-full object-contain p-3"
                     />
                   ) : (
-                    <Award className="h-6 w-6 text-brand-500" aria-hidden="true" />
+                    <Award className="h-10 w-10 text-brand-500" aria-hidden="true" />
                   )}
                 </span>
 

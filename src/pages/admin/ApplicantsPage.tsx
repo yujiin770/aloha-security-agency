@@ -7,6 +7,7 @@ import { DataTable, type Column, type SortState } from '@/components/DataTable'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
 import { Field, Select } from '@/components/ui/Field'
+import { InactiveToggle } from '@/components/ui/InactiveToggle'
 import { useToast } from '@/components/ui/Toast'
 import { queryKeys } from '@/lib/queryKeys'
 import { errorMessage } from '@/lib/errors'
@@ -32,6 +33,9 @@ export default function ApplicantsPage() {
   const [search, setSearch] = useState('')
   const debouncedSearch = useDebouncedValue(search, 300)
   const [showFilters, setShowFilters] = useState(false)
+  // Archived applications are hidden by default; picking the Archived status
+  // filter shows them regardless.
+  const [includeArchived, setIncludeArchived] = useState(false)
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE)
   const [sort, setSort] = useState<SortState>({
@@ -66,6 +70,7 @@ export default function ApplicantsPage() {
     status,
     positionId,
     branchId,
+    includeArchived,
     page,
     pageSize,
     sortColumn: sort.column,
@@ -232,6 +237,15 @@ export default function ApplicantsPage() {
         >
           Filters{activeFilterCount > 0 ? ` (${activeFilterCount})` : ''}
         </Button>
+
+        <InactiveToggle
+          checked={includeArchived}
+          onChange={(next) => {
+            setIncludeArchived(next)
+            setPage(1)
+          }}
+          label="archived"
+        />
 
         {activeFilterCount > 0 && (
           <Button

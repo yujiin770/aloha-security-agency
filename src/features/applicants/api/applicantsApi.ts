@@ -247,6 +247,8 @@ export interface ApplicantListParams {
   /** A `positions.id`, not an enum value. */
   positionId?: string
   branchId?: string
+  /** Archived applicants are left out unless asked for or filtered to directly. */
+  includeArchived?: boolean
   page: number
   pageSize: number
   sortColumn?: string
@@ -266,6 +268,7 @@ export async function listApplicants(
     status,
     positionId,
     branchId,
+    includeArchived = false,
     page,
     pageSize,
     sortColumn = 'created_at',
@@ -282,6 +285,7 @@ export async function listApplicants(
     .range(from, to)
 
   if (status) query = query.eq('status', status)
+  else if (!includeArchived) query = query.neq('status', 'archived')
   if (positionId) query = query.eq('position_id', positionId)
   if (branchId) query = query.eq('preferred_branch_id', branchId)
 

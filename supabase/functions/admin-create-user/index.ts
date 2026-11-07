@@ -205,11 +205,12 @@ Deno.serve(async (req) => {
         `password is required and must be at least ${MIN_PASSWORD} characters`,
       )
     }
-    // Only an owner may mint another owner — mirrors the user_roles RLS policy.
-    if (body.role === 'owner' && !caller.roles.includes('owner')) {
-      throw new HttpError(403, 'Only an owner may grant the owner role')
+    // There is exactly one Owner and it is assigned in Supabase, never through
+    // this function — the enforce_single_owner trigger (0024) refuses it too.
+    if (body.role === 'owner') {
+      throw new HttpError(403, 'The Owner role is assigned directly in Supabase')
     }
-    if (body.role !== 'owner' && !ASSIGNABLE.includes(body.role)) {
+    if (!ASSIGNABLE.includes(body.role)) {
       throw new HttpError(400, `Unknown role: ${body.role}`)
     }
 

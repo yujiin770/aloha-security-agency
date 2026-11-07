@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
+  ArrowRight,
   CheckCircle2,
   Download,
   FileStack,
@@ -31,19 +32,52 @@ import { formatNumber, formatPercent } from '@/utils/format'
 import { cn } from '@/utils/cn'
 import { ADMIN_ROLES } from '@/utils/constants'
 
+/** A local date as YYYY-MM-DD. `toISOString()` would shift it to UTC, which
+ *  in the Philippines rolls the 1st back to the previous month before 8am. */
+function isoDate(date: Date): string {
+  const m = String(date.getMonth() + 1).padStart(2, '0')
+  const d = String(date.getDate()).padStart(2, '0')
+  return `${date.getFullYear()}-${m}-${d}`
+}
+
+function today(): string {
+  return isoDate(new Date())
+}
+
+/** First day of the month `count` months back, so the range covers whole months. */
 function monthsAgo(count: number): string {
   const date = new Date()
-  date.setMonth(date.getMonth() - count)
   date.setDate(1)
-  return date.toISOString().slice(0, 10)
+  date.setMonth(date.getMonth() - count)
+  return isoDate(date)
 }
+
+/** "Dec 2025" — the summary under the range reads in months, like the chart. */
+function formatMonth(value: string): string {
+  const [y, m] = value.split('-').map(Number)
+  if (!y || !m) return value
+  return new Date(y, m - 1, 1).toLocaleDateString('en-PH', { month: 'short', year: 'numeric' })
+}
+
+/** `months` counts back from the current month, which is itself included. */
+const RANGE_PRESETS = [
+  { label: '3 months', months: 2 },
+  { label: '6 months', months: 5 },
+  { label: '12 months', months: 11 },
+] as const
 
 export default function ReportsPage() {
   const toast = useToast()
   const qc = useQueryClient()
 
   const [from, setFrom] = useState(monthsAgo(11))
-  const [to, setTo] = useState(new Date().toISOString().slice(0, 10))
+  const [to, setTo] = useState(today)
+
+  // Which quick range matches the current dates, if any — otherwise "Custom".
+  const activePreset =
+    to === today()
+      ? (RANGE_PRESETS.find((p) => monthsAgo(p.months) === from)?.months ?? null)
+      : null
 
   const funnel = useQuery({
     queryKey: queryKeys.reports.funnel({ from, to }),
@@ -130,38 +164,85 @@ export default function ReportsPage() {
         }
       />
 
-      <Card className="no-print mb-6">
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <Field label="From" hint="By calendar month">
-            <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
-          </Field>
-          <Field label="To">
-            <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
-          </Field>
-          <div className="flex items-end gap-2 sm:col-span-2">
-            {[
-              ['3 months', 2],
-              ['6 months', 5],
-              ['12 months', 11],
-            ].map(([label, months]) => (
-              <Button
-                key={label as string}
-                size="sm"
-                variant="secondary"
-                onClick={() => {
-                  setFrom(monthsAgo(months as number))
-                  setTo(new Date().toISOString().slice(0, 10))
-                }}
-              >
-                {label}
-              </Button>
-            ))}
+      <Card className="no-print mb-6" padded={false}>
+        <div className="flex flex-col gap-4 p-4 lg:flex-row lg:items-center lg:justify-between">
+          {/* Quick ranges. The active one is highlighted, so the control also
+              tells you which period you're looking at. */}
+          <div
+            role="group"
+            aria-label="Quick range"
+            className="inline-flex w-full rounded-lg border border-[var(--app-border)] bg-[var(--app-bg)] p-1 sm:w-auto"
+          >
+            {RANGE_PRESETS.map((preset) => {
+              const active = activePreset === preset.months
+              return (
+                <button
+                  key={preset.label}
+                  type="button"
+                  aria-pressed={active}
+                  onClick={() => {
+                    setFrom(monthsAgo(preset.months))
+                    setTo(today())
+                  }}
+                  className={cn(
+                    'flex-1 rounded-md px-3.5 py-1.5 text-sm font-medium whitespace-nowrap transition-colors sm:flex-none',
+                    active
+                      ? 'bg-[var(--app-surface)] text-[var(--app-text)] shadow-[var(--shadow-card)]'
+                      : 'text-[var(--app-text-muted)] hover:text-[var(--app-text)]',
+                  )}
+                >
+                  {preset.label}
+                </button>
+              )
+            })}
+            <span
+              aria-hidden={activePreset !== null}
+              className={cn(
+                'flex-1 rounded-md px-3.5 py-1.5 text-center text-sm font-medium whitespace-nowrap sm:flex-none',
+                activePreset === null
+                  ? 'bg-[var(--app-surface)] text-[var(--app-text)] shadow-[var(--shadow-card)]'
+                  : 'text-[var(--app-text-subtle)]',
+              )}
+            >
+              Custom
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <Field label="From" className="flex-1 sm:w-44 sm:flex-none [&>label]:sr-only">
+              <Input
+                type="date"
+                value={from}
+                max={to}
+                onChange={(e) => setFrom(e.target.value)}
+              />
+            </Field>
+            <ArrowRight
+              className="h-4 w-4 shrink-0 text-[var(--app-text-subtle)]"
+              aria-hidden="true"
+            />
+            <Field label="To" className="flex-1 sm:w-44 sm:flex-none [&>label]:sr-only">
+              <Input
+                type="date"
+                value={to}
+                min={from}
+                max={today()}
+                onChange={(e) => setTo(e.target.value)}
+              />
+            </Field>
           </div>
         </div>
-        <p className="mt-3 text-xs text-[var(--app-text-subtle)]">
-          Figures come from a materialized view. If they look stale after a bulk
-          change, use “Refresh data”.
-        </p>
+
+        <div className="flex flex-col gap-1 border-t border-[var(--app-border)] px-4 py-2.5 text-xs text-[var(--app-text-subtle)] sm:flex-row sm:items-center sm:justify-between">
+          <p>
+            Showing{' '}
+            <span className="font-medium text-[var(--app-text-muted)]">
+              {formatMonth(from)} – {formatMonth(to)}
+            </span>{' '}
+            · grouped by calendar month
+          </p>
+          <p>Numbers look out of date? Use “Refresh data”.</p>
+        </div>
       </Card>
 
       {funnel.isError ? (

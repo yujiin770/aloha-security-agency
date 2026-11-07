@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
 import { Field, Input, Select } from '@/components/ui/Field'
 import { ConfirmDialog, Modal } from '@/components/ui/Modal'
+import { InactiveToggle } from '@/components/ui/InactiveToggle'
 import { useToast } from '@/components/ui/Toast'
 import { queryKeys } from '@/lib/queryKeys'
 import { errorMessage } from '@/lib/errors'
@@ -34,7 +35,6 @@ const createSchema = z.object({
     .min(8, 'Use at least 8 characters')
     .max(72, 'Use at most 72 characters'),
   role: z.enum([
-    'owner',
     'admin',
     'system_administrator',
     'hr_staff',
@@ -62,7 +62,7 @@ export default function UsersPage() {
   const toast = useToast()
   const qc = useQueryClient()
   const navigate = useNavigate()
-  const { user: currentUser, hasRole } = useAuth()
+  const { user: currentUser } = useAuth()
 
   const [createOpen, setCreateOpen] = useState(false)
   const [activeTarget, setActiveTarget] = useState<StaffUser | null>(null)
@@ -71,6 +71,11 @@ export default function UsersPage() {
     queryKey: queryKeys.users.list({ all: true }),
     queryFn: () => listUsers(true),
   })
+
+  // Deactivated accounts are hidden until asked for.
+  const [showInactive, setShowInactive] = useState(false)
+  const inactiveCount = (users.data ?? []).filter((u) => !u.is_active).length
+  const visibleUsers = (users.data ?? []).filter((u) => showInactive || u.is_active)
 
   const roles = useRoles()
 
@@ -238,7 +243,8 @@ export default function UsersPage() {
   // Configuration shows through here rather than drifting from a constant.
   const assignableRoles = (roles.data ?? [])
     .filter((role) => role.is_assignable)
-    .filter((role) => role.key !== 'owner' || hasRole('owner'))
+    // The Owner is assigned in Supabase only, never from the console (0024).
+    .filter((role) => role.key !== 'owner' && role.inherits_from !== 'owner')
 
   return (
     <>
@@ -246,9 +252,17 @@ export default function UsersPage() {
         title="Users"
         description="Staff accounts, and which roles each of them holds."
         actions={
-          <Button leftIcon={<UserPlus className="h-4 w-4" />} onClick={openCreate}>
-            Create user
-          </Button>
+          <>
+            <InactiveToggle
+              checked={showInactive}
+              onChange={setShowInactive}
+              count={inactiveCount}
+              label="deactivated"
+            />
+            <Button leftIcon={<UserPlus className="h-4 w-4" />} onClick={openCreate}>
+              Create user
+            </Button>
+          </>
         }
       />
 
@@ -273,7 +287,7 @@ export default function UsersPage() {
       <DataTable
         caption="Staff users"
         columns={columns}
-        rows={users.data ?? []}
+        rows={visibleUsers}
         rowKey={(row) => row.id}
         isLoading={users.isLoading}
         error={users.isError ? errorMessage(users.error) : null}

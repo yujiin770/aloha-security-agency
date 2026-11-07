@@ -52,15 +52,16 @@ export const APPLICANT_STATUSES: EnumMeta<ApplicantStatus>[] = [
 
 /**
  * Legal pipeline moves, mirroring validate_applicant_transition() in
- * migration 0007. The UI only offers what the database will accept — but the
- * database is the authority, not this table.
+ * migration 0024. Statuses only move forward: once an applicant leaves a stage
+ * they cannot be sent back to it. The UI only offers what the database will
+ * accept — but the database is the authority, not this table.
  */
 export const APPLICANT_TRANSITIONS: Record<ApplicantStatus, ApplicantStatus[]> = {
   pending: ['screening', 'interview', 'rejected', 'archived'],
-  screening: ['interview', 'rejected', 'pending', 'archived'],
-  interview: ['hired', 'rejected', 'screening', 'archived'],
+  screening: ['interview', 'rejected', 'archived'],
+  interview: ['hired', 'rejected', 'archived'],
   hired: ['archived'],
-  rejected: ['archived', 'pending'],
+  rejected: ['archived'],
   archived: [],
 }
 

@@ -21,6 +21,7 @@ import { Card } from '@/components/ui/Card'
 import { Checkbox, Field, Input, Select, Textarea } from '@/components/ui/Field'
 import { useToast } from '@/components/ui/Toast'
 import { FileUpload } from '@/features/applicants/components/FileUpload'
+import { LocationFields } from '@/features/applicants/components/LocationFields'
 import {
   HeightField,
   WeightField,
@@ -514,24 +515,7 @@ export default function ApplyPage() {
               <Field label="House no. and street" error={errors.address_line?.message}>
                 <Input autoComplete="street-address" {...form.register('address_line')} />
               </Field>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <Field label="Barangay" error={errors.barangay?.message}>
-                  <Input {...form.register('barangay')} />
-                </Field>
-                <Field
-                  label="City / municipality"
-                  required
-                  error={errors.city_municipality?.message}
-                >
-                  <Input {...form.register('city_municipality')} />
-                </Field>
-                <Field label="Province" error={errors.province?.message}>
-                  <Input {...form.register('province')} />
-                </Field>
-                <Field label="Region" error={errors.region?.message}>
-                  <Input placeholder="e.g. NCR, Region VII" {...form.register('region')} />
-                </Field>
-              </div>
+              <LocationFields form={form} />
               <Field label="Postal code" error={errors.postal_code?.message}>
                 <Input className="sm:max-w-[12rem]" {...form.register('postal_code')} />
               </Field>

@@ -8,6 +8,7 @@ import {
   Search,
   ShieldAlert,
   UserCheck,
+  UserPlus,
   UsersRound,
 } from 'lucide-react'
 import { PageHeader } from '@/components/PageHeader'
@@ -21,9 +22,12 @@ import { fetchDashboardStats } from '@/features/reports/api/reportsApi'
 import { queryKeys } from '@/lib/queryKeys'
 import { errorMessage } from '@/lib/errors'
 import { listPersonnel } from '@/features/personnel/api/personnelApi'
+import { AddPersonnelDialog } from '@/features/personnel/components/AddPersonnelDialog'
+import { Can } from '@/app/guards'
 import { listBranchOptions } from '@/features/branches/api/branchesApi'
 import { downloadCsv } from '@/features/reports/api/reportsApi'
 import {
+  ADMIN_ROLES,
   DEFAULT_PAGE_SIZE,
   EMPLOYMENT_STATUSES,
   employmentStatusMeta,
@@ -40,6 +44,7 @@ export default function PersonnelPage() {
   const [search, setSearch] = useState('')
   const debouncedSearch = useDebouncedValue(search, 300)
   const [status, setStatus] = useState<EmploymentStatus | ''>('active')
+  const [addOpen, setAddOpen] = useState(false)
   const [positionId, setPositionId] = useState('')
   const [branchId, setBranchId] = useState('')
   const [page, setPage] = useState(1)
@@ -216,15 +221,25 @@ export default function PersonnelPage() {
         title="Personnel roster"
         description="Everyone currently employed, and where they're posted."
         actions={
-          <Button
-            variant="secondary"
-            leftIcon={<Download className="h-4 w-4" />}
-            onClick={exportCsv}
-          >
-            Export CSV
-          </Button>
+          <>
+            <Button
+              variant="secondary"
+              leftIcon={<Download className="h-4 w-4" />}
+              onClick={exportCsv}
+            >
+              Export CSV
+            </Button>
+            {/* Mirrors personnel_insert: administrators and HR. */}
+            <Can roles={[...ADMIN_ROLES, 'hr_staff']}>
+              <Button leftIcon={<UserPlus className="h-4 w-4" />} onClick={() => setAddOpen(true)}>
+                Add existing personnel
+              </Button>
+            </Can>
+          </>
         }
       />
+
+      <AddPersonnelDialog open={addOpen} onClose={() => setAddOpen(false)} />
 
       {!stats.isError && (
         <section aria-label="Roster summary" className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">

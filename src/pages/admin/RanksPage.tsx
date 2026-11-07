@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Checkbox, Field, Input, Textarea } from '@/components/ui/Field'
 import { ConfirmDialog, Modal } from '@/components/ui/Modal'
+import { InactiveToggle } from '@/components/ui/InactiveToggle'
 import { useToast } from '@/components/ui/Toast'
 import { Can } from '@/app/guards'
 import { errorMessage } from '@/lib/errors'
@@ -69,6 +70,9 @@ export default function RanksPage() {
   const [positionDraft, setPositionDraft] = useState<string[] | null>(null)
 
   const ranks = useRanks(true)
+  const [showInactive, setShowInactive] = useState(false)
+  const inactiveCount = (ranks.data ?? []).filter((r) => !r.is_active).length
+  const visibleRows = (ranks.data ?? []).filter((r) => showInactive || r.is_active)
   const positions = usePositions(true)
   const rankPositions = useRankPositions(mapping?.id)
 
@@ -239,17 +243,24 @@ export default function RanksPage() {
           </p>
         </div>
 
-        <Can roles={[...ADMIN_ROLES]}>
-          <Button leftIcon={<Plus className="h-4 w-4" />} onClick={openCreate}>
-            New rank
-          </Button>
-        </Can>
+        <div className="flex flex-wrap items-center gap-2">
+          <InactiveToggle
+            checked={showInactive}
+            onChange={setShowInactive}
+            count={inactiveCount}
+          />
+          <Can roles={[...ADMIN_ROLES]}>
+            <Button leftIcon={<Plus className="h-4 w-4" />} onClick={openCreate}>
+              New rank
+            </Button>
+          </Can>
+        </div>
       </div>
 
       <DataTable
         caption="Ranks"
         columns={columns}
-        rows={ranks.data ?? []}
+        rows={visibleRows}
         rowKey={(row) => row.id}
         isLoading={ranks.isLoading}
         error={ranks.isError ? errorMessage(ranks.error) : null}

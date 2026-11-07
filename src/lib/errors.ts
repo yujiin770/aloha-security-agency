@@ -70,6 +70,20 @@ function isInternalFault(code: string | undefined): boolean {
   return code.startsWith('42') || code.startsWith('XX') || code === '0A000'
 }
 
+/**
+ * Rule violations raised by our own triggers with a sentence written for the
+ * person reading it (0022, 0024). They carry generic SQLSTATEs — 23514, 42501 —
+ * so they are recognised by their opening words instead.
+ */
+const HUMAN_MESSAGE_PREFIXES = [
+  'Illegal applicant status',
+  'An applicant cannot be moved from',
+  'An applicant is hired through the onboarding step',
+  'The Owner role cannot be granted',
+  'There can be only one Owner',
+  'A role cannot be based on Owner',
+]
+
 function isPostgrestError(e: unknown): e is PostgrestError {
   return (
     typeof e === 'object' && e !== null && 'message' in e && 'code' in e
@@ -89,7 +103,10 @@ export function toAppError(error: unknown, fallback = 'Something went wrong.'): 
 
     // A RAISE EXCEPTION from one of our SQL functions: the message is written
     // for humans, so pass it through.
-    if (error.code === 'P0001' || error.message.startsWith('Illegal applicant status')) {
+    if (
+      error.code === 'P0001' ||
+      HUMAN_MESSAGE_PREFIXES.some((prefix) => error.message.startsWith(prefix))
+    ) {
       return new AppError(error.message, error.code, error)
     }
 
