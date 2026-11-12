@@ -22,6 +22,8 @@ import {
 import { ADMIN_ROLES } from '@/utils/constants'
 import { formatDate } from '@/utils/format'
 import type { NewsPostRow } from '@/types/database.types'
+import { useDialogDraft } from '@/hooks/useDialogDraft'
+import { DraftNotice } from '@/components/ui/DraftNotice'
 import { ContentToolbar } from './components/ContentToolbar'
 
 const schema = z
@@ -105,6 +107,22 @@ export default function NewsPage() {
     setEditing(row)
     setDialogOpen(true)
   }
+
+  // Unsaved create/edit work survives a refresh: the dialog reopens with it.
+  // The image is held outside the form and is not part of the draft.
+  const draft = useDialogDraft({
+    id: 'cms.news',
+    form,
+    open: dialogOpen,
+    recordId: editing?.id ?? null,
+    ready: posts.isSuccess,
+    onResume: (recordId) => {
+      if (recordId === null) return openCreate()
+      const row = posts.data?.find((r) => r.id === recordId)
+      if (!row) return false
+      openEdit(row)
+    },
+  })
 
   async function onSubmit(values: FormValues) {
     const payload = {
@@ -270,6 +288,7 @@ export default function NewsPage() {
           </>
         }
       >
+        <DraftNotice restoredAt={draft.restoredAt} onDiscard={draft.discard} />
         <form className="space-y-5" noValidate>
           <Field label="Title" required error={errors.title?.message}>
             <Input

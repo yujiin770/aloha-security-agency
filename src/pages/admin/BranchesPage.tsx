@@ -38,6 +38,8 @@ import { listUsers } from '@/features/users/api/usersApi'
 import { formatPercent } from '@/utils/format'
 import { cn } from '@/utils/cn'
 import { useDebouncedValue } from '@/hooks/useDebouncedValue'
+import { useDialogDraft } from '@/hooks/useDialogDraft'
+import { DraftNotice } from '@/components/ui/DraftNotice'
 import type { BranchRow } from '@/types/database.types'
 import { ADMIN_ROLES } from '@/utils/constants'
 
@@ -200,6 +202,23 @@ export default function BranchesPage() {
     setCreating(false)
     setEditing(null)
   }
+
+  // Unsaved create/edit work survives a refresh: the dialog reopens with it.
+  const draft = useDialogDraft({
+    id: 'branches',
+    form,
+    open: creating,
+    recordId: editing?.id ?? null,
+    // Coordinators too: the coordinator select must have its options before a
+    // restored value is laid over it, or it shows blank while the form holds it.
+    ready: branches.isSuccess && !coordinators.isPending,
+    onResume: (recordId) => {
+      if (recordId === null) return openCreate()
+      const branch = branches.data?.find((b) => b.id === recordId)
+      if (!branch) return false
+      openEdit(branch)
+    },
+  })
 
   const staffingFor = (branchId: string) =>
     staffing.data?.find((s) => s.branch_id === branchId)
@@ -557,6 +576,7 @@ export default function BranchesPage() {
           </>
         }
       >
+        <DraftNotice restoredAt={draft.restoredAt} onDiscard={draft.discard} />
         <form className="space-y-4" noValidate>
           <div className="grid gap-4 sm:grid-cols-3">
             <Field

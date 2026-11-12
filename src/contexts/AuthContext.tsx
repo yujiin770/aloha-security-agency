@@ -13,6 +13,7 @@ import { supabase } from '@/lib/supabase'
 import { queryClient } from '@/lib/queryClient'
 import { fetchSessionUser, signOut as apiSignOut, type SessionUser } from '@/features/auth/api/authApi'
 import { markDeliberateSignOut } from '@/features/auth/signOutIntent'
+import { clearAllDrafts } from '@/lib/draftStorage'
 import { ADMIN_ROLES } from '@/utils/constants'
 import type { AppRole } from '@/types/database.types'
 
@@ -150,6 +151,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // out on Applicants and back in expects the Dashboard, not Applicants.
     // LoginPage reads and clears this.
     markDeliberateSignOut()
+    // Unsaved staff form drafts hold personal data; a deliberate sign-out is
+    // the user leaving this browser, so they go too. Session expiry keeps them.
+    clearAllDrafts()
     await apiSignOut()
     queryClient.clear()
   }, [])

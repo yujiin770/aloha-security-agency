@@ -23,6 +23,8 @@ import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Field, Input } from '@/components/ui/Field'
 import { ErrorState, Skeleton } from '@/components/ui/Feedback'
+import { DraftNotice } from '@/components/ui/DraftNotice'
+import { useStateDraft } from '@/hooks/useStateDraft'
 import { useToast } from '@/components/ui/Toast'
 import { queryKeys } from '@/lib/queryKeys'
 import { errorMessage } from '@/lib/errors'
@@ -104,6 +106,19 @@ export default function SettingsPage() {
   const [drafts, setDrafts] = useState<Record<string, string>>({})
   const [activeTab, setActiveTab] = useState<string | null>(null)
 
+  // Unsaved edits survive a refresh. Each successful save removes its key from
+  // `drafts`; once the map is empty again the stored draft is deleted with it.
+  const draft = useStateDraft({
+    id: 'settings',
+    open: true,
+    recordId: null,
+    values: { drafts },
+    apply: (restored) => {
+      if (restored.drafts) setDrafts(restored.drafts)
+    },
+    ready: settings.isSuccess,
+  })
+
   // Unsaved edits are lost on reload or tab close, so the browser asks first.
   const hasDrafts = Object.keys(drafts).length > 0
   useEffect(() => {
@@ -163,6 +178,8 @@ export default function SettingsPage() {
         title="Settings"
         description="Your profile and system configuration. Saved changes take effect immediately."
       />
+
+      <DraftNotice restoredAt={draft.restoredAt} onDiscard={draft.discard} />
 
       {!isAdmin && (
         <Card className="mb-6 border-info/25 bg-info-soft">

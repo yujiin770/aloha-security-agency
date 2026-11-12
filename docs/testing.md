@@ -66,7 +66,7 @@ The constraints and triggers are load-bearing — test them directly.
 
 | Rule | Test |
 |---|---|
-| 18+ age check | Insert a 17-year-old → expect `23514` |
+| 21+ age check | Insert a 20-year-old → expect `23514` |
 | Rejection needs a reason | Set `status='rejected'` with null reason → expect `23514` |
 | Legal transitions only | `pending` → `hired` → expect a raised exception |
 | No double-booking | Two overlapping active deployments for one guard → expect `23P01` |

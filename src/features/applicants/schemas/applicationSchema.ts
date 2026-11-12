@@ -10,6 +10,12 @@ import { z } from 'zod'
  * determined submitter can POST straight to PostgREST.
  */
 
+/**
+ * Youngest age at which anyone may apply. Mirrors `applicants_age_chk` and
+ * `positions_min_age_chk` (migration 0026) — change all three together.
+ */
+export const MIN_APPLICANT_AGE = 21
+
 const PH_PHONE = /^(\+63|0)9\d{9}$/
 const OPTIONAL_TEXT = z.string().trim().max(200).optional().or(z.literal(''))
 
@@ -38,10 +44,10 @@ export const personalStepSchema = z.object({
     .refine((value) => {
       const dob = new Date(value)
       if (Number.isNaN(dob.getTime())) return false
-      const eighteen = new Date()
-      eighteen.setFullYear(eighteen.getFullYear() - 18)
-      return dob <= eighteen
-    }, 'You must be at least 18 years old to apply'),
+      const cutoff = new Date()
+      cutoff.setFullYear(cutoff.getFullYear() - MIN_APPLICANT_AGE)
+      return dob <= cutoff
+    }, `You must be at least ${MIN_APPLICANT_AGE} years old to apply`),
   sex: z.enum(['male', 'female']),
   civil_status: z
     .enum(['single', 'married', 'widowed', 'separated', 'divorced'])

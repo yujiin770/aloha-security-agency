@@ -90,7 +90,7 @@ erDiagram
         text reference_no UK "ASA-YYYY-NNNNNN"
         text first_name
         text last_name
-        date birth_date "CHECK >= 18 years"
+        date birth_date "CHECK >= 21 years"
         uuid position_id FK
         applicant_status status
         uuid preferred_branch_id FK
@@ -251,8 +251,8 @@ person must have a separation date, and an active one must not.
 **`applicants`** — the only table the anonymous role may INSERT into. Notable
 constraints:
 
-- `applicants_age_chk` — at least 18 years old (Philippine law for private
-  security personnel)
+- `applicants_age_chk` — at least 21 years old (agency policy, above the statutory
+  18 for private security personnel; raised in migration 0026)
 - `applicants_rejection_reason_chk` — a rejected applicant must carry a reason
 - `applicants_reference_no_unique` — the `ASA-YYYY-NNNNNN` reference
 - trigram GIN index on the concatenated name, backing the admin search box

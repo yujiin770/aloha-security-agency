@@ -65,7 +65,7 @@ of whoever opens the export in Excel.
 
 ### A04 Insecure Design
 
-Business rules live in the database, where they cannot be skipped: the 18+ age
+Business rules live in the database, where they cannot be skipped: the 21+ age
 check, the mandatory rejection reason, the legal-transitions trigger, the
 no-double-booking exclusion constraint, and the requirement that hiring goes
 through `promote_applicant_to_personnel()` rather than a raw insert.

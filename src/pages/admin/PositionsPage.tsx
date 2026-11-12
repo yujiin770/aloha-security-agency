@@ -9,6 +9,8 @@ import { Button } from '@/components/ui/Button'
 import { Checkbox, Field, Input, Select, Textarea } from '@/components/ui/Field'
 import { ConfirmDialog, Modal } from '@/components/ui/Modal'
 import { InactiveToggle } from '@/components/ui/InactiveToggle'
+import { DraftNotice } from '@/components/ui/DraftNotice'
+import { useDialogDraft } from '@/hooks/useDialogDraft'
 import { useToast } from '@/components/ui/Toast'
 import { Can } from '@/app/guards'
 import { errorMessage } from '@/lib/errors'
@@ -19,6 +21,7 @@ import {
   useUpdatePosition,
 } from '@/features/config/hooks/useConfig'
 import { ADMIN_ROLES, TONE_OPTIONS } from '@/utils/constants'
+import { MIN_APPLICANT_AGE } from '@/features/applicants/schemas/applicationSchema'
 import { formatCurrency } from '@/utils/format'
 import type { PositionRow, ToneToken } from '@/types/database.types'
 
@@ -51,7 +54,7 @@ const EMPTY: FormValues = {
   name: '',
   description: '',
   category: '',
-  min_age: '18',
+  min_age: String(MIN_APPLICANT_AGE),
   max_age: '',
   min_height_cm: '',
   min_years_experience: '0',
@@ -121,13 +124,28 @@ export default function PositionsPage() {
     setDialogOpen(true)
   }
 
+  // Unsaved create/edit work survives a refresh: the dialog reopens with it.
+  const draft = useDialogDraft({
+    id: 'positions',
+    form,
+    open: dialogOpen,
+    recordId: editing?.id ?? null,
+    ready: positions.isSuccess,
+    onResume: (recordId) => {
+      if (recordId === null) return openCreate()
+      const position = positions.data?.find((p) => p.id === recordId)
+      if (!position) return false
+      openEdit(position)
+    },
+  })
+
   async function onSubmit(values: FormValues) {
     const payload = {
       code: values.code.trim(),
       name: values.name.trim(),
       description: values.description?.trim() || null,
       category: values.category?.trim() || null,
-      min_age: Number(values.min_age) || 18,
+      min_age: Math.max(MIN_APPLICANT_AGE, Number(values.min_age) || MIN_APPLICANT_AGE),
       max_age: values.max_age ? Number(values.max_age) : null,
       min_height_cm: values.min_height_cm ? Number(values.min_height_cm) : null,
       min_years_experience: Number(values.min_years_experience) || 0,
@@ -332,6 +350,7 @@ export default function PositionsPage() {
           </>
         }
       >
+        <DraftNotice restoredAt={draft.restoredAt} onDiscard={draft.discard} />
         <form className="space-y-4" noValidate>
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="Name" required error={errors.name?.message}>
@@ -392,13 +411,13 @@ export default function PositionsPage() {
               <Field
                 label="Min age"
                 required
-                hint="18 or above"
+                hint={`${MIN_APPLICANT_AGE} or above`}
                 error={errors.min_age?.message}
               >
-                <Input type="number" min={18} max={70} {...form.register('min_age')} />
+                <Input type="number" min={MIN_APPLICANT_AGE} max={70} {...form.register('min_age')} />
               </Field>
               <Field label="Max age" error={errors.max_age?.message}>
-                <Input type="number" min={18} max={70} {...form.register('max_age')} />
+                <Input type="number" min={MIN_APPLICANT_AGE} max={70} {...form.register('max_age')} />
               </Field>
               <Field label="Min height (cm)" error={errors.min_height_cm?.message}>
                 <Input type="number" min={100} max={250} {...form.register('min_height_cm')} />

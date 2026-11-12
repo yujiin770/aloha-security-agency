@@ -63,6 +63,8 @@ import {
   maskId,
 } from '@/utils/format'
 import { formatFeetInches, formatPounds } from '@/utils/units'
+import { useStateDraft } from '@/hooks/useStateDraft'
+import { DraftNotice } from '@/components/ui/DraftNotice'
 import type { ApplicantDocumentRow, ApplicantStatus } from '@/types/database.types'
 
 /**
@@ -224,6 +226,47 @@ export default function ApplicantDetailPage() {
     setHireOpen(false)
     setNotify(true)
   }, [])
+
+  // Unsaved dialog input survives a refresh: the dialog reopens with it. Ids
+  // are scoped by applicant so drafts for different applicants never collide,
+  // and a draft is dropped if the applicant has since moved on and the action
+  // no longer applies.
+  const statusDraft = useStateDraft({
+    id: `applicant.status:${id}`,
+    open: statusTarget !== null,
+    recordId: statusTarget,
+    values: { rejectionReason, interviewAt, note, notify },
+    apply: (v) => {
+      if (v.rejectionReason !== undefined) setRejectionReason(v.rejectionReason)
+      if (v.interviewAt !== undefined) setInterviewAt(v.interviewAt)
+      if (v.note !== undefined) setNote(v.note)
+      if (v.notify !== undefined) setNotify(v.notify)
+    },
+    ready: applicant.isSuccess,
+    onResume: (target) => {
+      const current = applicant.data?.status
+      const move = target as ApplicantStatus | null
+      if (!current || !move || move === 'hired') return false
+      if (!APPLICANT_TRANSITIONS[current].includes(move)) return false
+      setStatusTarget(move)
+    },
+  })
+
+  const hireDraft = useStateDraft({
+    id: `applicant.hire:${id}`,
+    open: hireOpen,
+    recordId: id,
+    values: { rankId, notify },
+    apply: (v) => {
+      if (v.rankId !== undefined) setRankId(v.rankId)
+      if (v.notify !== undefined) setNotify(v.notify)
+    },
+    ready: applicant.isSuccess,
+    onResume: () => {
+      if (applicant.data?.status !== 'interview') return false
+      setHireOpen(true)
+    },
+  })
 
   // Images preview in place; anything else (PDFs) opens in a new tab, where
   // the browser's own viewer does a better job than we could.
@@ -668,6 +711,7 @@ export default function ApplicantDetailPage() {
           </>
         }
       >
+        <DraftNotice restoredAt={statusDraft.restoredAt} onDiscard={statusDraft.discard} />
         <div className="space-y-4">
           {(statusTarget === 'rejected' || statusTarget === 'archived') && (
             <p className="rounded-lg border border-warning/30 bg-warning-soft px-3 py-2 text-sm text-amber-900 dark:bg-warning/10 dark:text-amber-200">
@@ -753,6 +797,7 @@ export default function ApplicantDetailPage() {
           </>
         }
       >
+        <DraftNotice restoredAt={hireDraft.restoredAt} onDiscard={hireDraft.discard} />
         <div className="space-y-4">
           <p className="text-sm text-[var(--app-text-muted)]">
             This marks the application as hired and creates a personnel record

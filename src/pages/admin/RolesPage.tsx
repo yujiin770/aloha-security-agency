@@ -10,6 +10,8 @@ import { Button } from '@/components/ui/Button'
 import { Checkbox, Field, Input, Select, Textarea } from '@/components/ui/Field'
 import { ConfirmDialog, Modal } from '@/components/ui/Modal'
 import { ErrorState, Skeleton } from '@/components/ui/Feedback'
+import { DraftNotice } from '@/components/ui/DraftNotice'
+import { useDialogDraft } from '@/hooks/useDialogDraft'
 import { useToast } from '@/components/ui/Toast'
 import { Can } from '@/app/guards'
 import { errorMessage } from '@/lib/errors'
@@ -169,6 +171,28 @@ export default function RolesPage() {
     })
     setCreating(true)
   }
+
+  // Unsaved work in either dialog survives a refresh: the dialog reopens with it.
+  const editDraft = useDialogDraft({
+    id: 'roles.edit',
+    form: editForm,
+    open: editing !== null,
+    recordId: editing?.key ?? null,
+    ready: roles.isSuccess,
+    onResume: (roleKey) => {
+      const role = roles.data?.find((r) => r.key === roleKey)
+      if (!role) return false
+      openEdit(role)
+    },
+  })
+
+  const createDraft = useDialogDraft({
+    id: 'roles.create',
+    form: createForm,
+    open: creating,
+    recordId: null,
+    onResume: () => openCreate(),
+  })
 
   async function onEditSubmit(values: EditValues) {
     if (!editing) return
@@ -508,6 +532,7 @@ export default function RolesPage() {
           </>
         }
       >
+        <DraftNotice restoredAt={editDraft.restoredAt} onDiscard={editDraft.discard} />
         <form className="space-y-4" noValidate>
           <p className="rounded-lg bg-[var(--app-bg)] p-3 text-xs text-[var(--app-text-muted)]">
             A role's key is referenced by every grant already made, so it cannot be
@@ -564,6 +589,7 @@ export default function RolesPage() {
           </>
         }
       >
+        <DraftNotice restoredAt={createDraft.restoredAt} onDiscard={createDraft.discard} />
         <form className="space-y-4" noValidate>
           <Field
             label="Label"

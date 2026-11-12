@@ -9,6 +9,7 @@ import {
   Check,
   CircleCheck,
   Copy,
+  Mail,
   RotateCcw,
   Search,
   Send,
@@ -33,6 +34,7 @@ import {
 } from '@/features/applicants/schemas/applicationSchema'
 import {
   checkEmailEligibility,
+  sendApplicationReceipt,
   submitApplication,
   uploadApplicantDocument,
 } from '@/features/applicants/api/applicantsApi'
@@ -105,6 +107,12 @@ export default function ApplyPage() {
   const [files, setFiles] = useState<Record<string, File | null>>({})
   const [reference, setReference] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
+  // The confirmation email carrying the reference number. Tracked so the
+  // success screen can say honestly whether it went out.
+  const [receiptEmail, setReceiptEmail] = useState<{
+    address: string
+    status: 'sending' | 'sent' | 'failed'
+  } | null>(null)
   const [submitFailure, setSubmitFailure] = useState<
     { kind: 'network' | 'other'; message: string } | null
   >(null)
@@ -210,6 +218,15 @@ export default function ApplyPage() {
         submissionId,
       })
 
+      // Not awaited: the email goes out while the documents upload, and its
+      // outcome only changes one line on the success screen.
+      setReceiptEmail({ address: values.email.trim(), status: 'sending' })
+      void sendApplicationReceipt(applicant).then((sent) => {
+        setReceiptEmail((current) =>
+          current ? { ...current, status: sent ? 'sent' : 'failed' } : current,
+        )
+      })
+
       // Uploads are best-effort: the application itself is already safely
       // recorded, so a failed attachment must not read as a failed submission.
       const pending = Object.entries(files).filter(([, file]) => file)
@@ -311,6 +328,26 @@ export default function ApplyPage() {
                 check your application status.
               </p>
             </div>
+
+            {receiptEmail && (
+              <p
+                className="mt-4 flex items-center justify-center gap-2 text-sm text-[var(--app-text-muted)]"
+                role="status"
+              >
+                <Mail className="h-4 w-4 shrink-0" aria-hidden="true" />
+                <span>
+                  {receiptEmail.status === 'sending' && (
+                    <>Sending a copy of your reference number to <strong className="text-[var(--app-text)]">{receiptEmail.address}</strong>…</>
+                  )}
+                  {receiptEmail.status === 'sent' && (
+                    <>A copy of your reference number has been sent to <strong className="text-[var(--app-text)]">{receiptEmail.address}</strong>. Check your spam folder if you don't see it.</>
+                  )}
+                  {receiptEmail.status === 'failed' && (
+                    <>We couldn't email your reference number just now, so please write it down.</>
+                  )}
+                </span>
+              </p>
+            )}
 
             <div className="mt-6 flex flex-wrap justify-center gap-3">
               <Link to="/status">

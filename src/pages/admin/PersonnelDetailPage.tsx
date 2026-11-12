@@ -33,6 +33,8 @@ import {
   humanize,
   maskId,
 } from '@/utils/format'
+import { useStateDraft } from '@/hooks/useStateDraft'
+import { DraftNotice } from '@/components/ui/DraftNotice'
 import type { EmploymentStatus } from '@/types/database.types'
 
 export default function PersonnelDetailPage() {
@@ -101,6 +103,24 @@ export default function PersonnelDetailPage() {
       void qc.invalidateQueries({ queryKey: queryKeys.reports.all })
     },
     onError: (error) => toast.error('Could not update record', errorMessage(error)),
+  })
+
+  // Unsaved separation input survives a refresh: the dialog reopens with it,
+  // unless the person is no longer active. Scoped by personnel id.
+  const separateDraft = useStateDraft({
+    id: `personnel.separate:${id}`,
+    open: separateOpen,
+    recordId: id,
+    values: { separationStatus, separationDate },
+    apply: (v) => {
+      if (v.separationStatus !== undefined) setSeparationStatus(v.separationStatus)
+      if (v.separationDate !== undefined) setSeparationDate(v.separationDate)
+    },
+    ready: person.isSuccess,
+    onResume: () => {
+      if (person.data?.employment_status !== 'active') return false
+      setSeparateOpen(true)
+    },
   })
 
   if (person.isLoading) return <LoadingState label="Loading personnel record…" />
@@ -336,6 +356,7 @@ export default function PersonnelDetailPage() {
           </>
         }
       >
+        <DraftNotice restoredAt={separateDraft.restoredAt} onDiscard={separateDraft.discard} />
         <div className="space-y-4">
           <p className="text-sm text-[var(--app-text-muted)]">
             This marks the person as no longer employed.

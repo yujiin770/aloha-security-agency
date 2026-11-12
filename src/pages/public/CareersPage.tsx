@@ -18,7 +18,7 @@ import type { PositionRow } from '@/types/database.types'
 import { useMediaSlot } from '@/features/cms/hooks/useCms'
 
 const GENERAL_REQUIREMENTS = [
-  'Filipino citizen, at least 18 years old',
+  'Filipino citizen, at least 21 years old',
   'At least high school graduate (senior high or college preferred)',
   'Physically and mentally fit, of good moral character',
   'Valid NBI clearance (issued within the last 6 months)',

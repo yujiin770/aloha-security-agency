@@ -44,6 +44,8 @@ import {
 } from '@/utils/constants'
 import { formatCurrency, formatDate } from '@/utils/format'
 import { useDebouncedValue } from '@/hooks/useDebouncedValue'
+import { useStateDraft } from '@/hooks/useStateDraft'
+import { DraftNotice } from '@/components/ui/DraftNotice'
 import type {
   ActiveDeploymentView,
   DeploymentStatus,
@@ -189,6 +191,64 @@ export default function DeploymentsPage() {
     setPost('')
     setRate('')
   }
+
+  // Unsaved dialog input survives a refresh: the dialog reopens with it. End
+  // and transfer reopen only if their deployment is still on the loaded page.
+  const findRow = (id: string | null) =>
+    (query.data?.rows ?? []).find((row) => row.id === id) ?? null
+
+  const assignDraft = useStateDraft({
+    id: 'deployments.assign',
+    open: assignOpen,
+    recordId: null,
+    values: { personnelId, assignBranch, assignShift, startDate, post, rate },
+    apply: (v) => {
+      if (v.personnelId !== undefined) setPersonnelId(v.personnelId)
+      if (v.assignBranch !== undefined) setAssignBranch(v.assignBranch)
+      if (v.assignShift !== undefined) setAssignShift(v.assignShift)
+      if (v.startDate !== undefined) setStartDate(v.startDate)
+      if (v.post !== undefined) setPost(v.post)
+      if (v.rate !== undefined) setRate(v.rate)
+    },
+    onResume: () => setAssignOpen(true),
+  })
+
+  const endDraft = useStateDraft({
+    id: 'deployments.end',
+    open: endTarget !== null,
+    recordId: endTarget?.id ?? null,
+    values: { effectiveDate, reason },
+    apply: (v) => {
+      if (v.effectiveDate !== undefined) setEffectiveDate(v.effectiveDate)
+      if (v.reason !== undefined) setReason(v.reason)
+    },
+    ready: query.isSuccess,
+    onResume: (recordId) => {
+      const row = findRow(recordId)
+      if (!row) return false
+      setEndTarget(row)
+      setEffectiveDate(today())
+    },
+  })
+
+  const transferDraft = useStateDraft({
+    id: 'deployments.transfer',
+    open: transferTarget !== null,
+    recordId: transferTarget?.id ?? null,
+    values: { targetBranch, effectiveDate, reason },
+    apply: (v) => {
+      if (v.targetBranch !== undefined) setTargetBranch(v.targetBranch)
+      if (v.effectiveDate !== undefined) setEffectiveDate(v.effectiveDate)
+      if (v.reason !== undefined) setReason(v.reason)
+    },
+    ready: query.isSuccess,
+    onResume: (recordId) => {
+      const row = findRow(recordId)
+      if (!row) return false
+      setTransferTarget(row)
+      setEffectiveDate(today())
+    },
+  })
 
   const columns: Column<ActiveDeploymentView>[] = [
     {
@@ -540,6 +600,7 @@ export default function DeploymentsPage() {
           </>
         }
       >
+        <DraftNotice restoredAt={assignDraft.restoredAt} onDiscard={assignDraft.discard} />
         <div className="space-y-4">
           <Field
             label="Personnel"
@@ -675,6 +736,7 @@ export default function DeploymentsPage() {
           </>
         }
       >
+        <DraftNotice restoredAt={endDraft.restoredAt} onDiscard={endDraft.discard} />
         <div className="space-y-4">
           <Field label="End date" required>
             <Input
@@ -722,6 +784,7 @@ export default function DeploymentsPage() {
           </>
         }
       >
+        <DraftNotice restoredAt={transferDraft.restoredAt} onDiscard={transferDraft.discard} />
         <div className="space-y-4">
           <Field label="New branch / post" required>
             <Select

@@ -13,6 +13,8 @@ import { useAuth } from '@/contexts/AuthContext'
 import { requestPasswordReset, updateOwnProfile } from '@/features/auth/api/authApi'
 import { errorMessage } from '@/lib/errors'
 import { formatDateTime, humanize, initials } from '@/utils/format'
+import { useDialogDraft } from '@/hooks/useDialogDraft'
+import { DraftNotice } from '@/components/ui/DraftNotice'
 
 const schema = z.object({
   full_name: z.string().trim().min(1, 'Your name is required').max(120),
@@ -43,10 +45,22 @@ export default function ProfilePage() {
         job_title: values.job_title?.trim() || null,
       }),
     onSuccess: async () => {
+      draft.clear()
       toast.success('Profile saved')
       await refresh()
     },
     onError: (error) => toast.error('Could not save your profile', errorMessage(error)),
+  })
+
+  // Always on screen, so there is no dialog to reopen. useForm syncs `values`
+  // in its own effect, which runs before this hook's, so a restored draft is
+  // laid over the loaded profile rather than wiped by it.
+  const draft = useDialogDraft({
+    id: 'profile',
+    form,
+    open: true,
+    recordId: null,
+    ready: Boolean(user),
   })
 
   const resetPassword = useMutation({
@@ -85,6 +99,7 @@ export default function ProfilePage() {
               className="space-y-4 p-5"
               noValidate
             >
+              <DraftNotice restoredAt={draft.restoredAt} onDiscard={draft.discard} />
               <Field
                 label="Full name"
                 required

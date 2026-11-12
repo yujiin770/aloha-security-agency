@@ -28,7 +28,7 @@ export class AppError extends Error {
 
 const CONSTRAINT_MESSAGES: Record<string, string> = {
   applicants_reference_no_unique: 'That reference number is already in use.',
-  applicants_age_chk: 'Applicants must be at least 18 years old.',
+  applicants_age_chk: 'Applicants must be at least 21 years old.',
   applicants_rejection_reason_chk: 'A reason is required when rejecting an applicant.',
   applicants_email_format_chk: 'Please enter a valid email address.',
   applicants_phone_format_chk: 'Please enter a valid phone number.',

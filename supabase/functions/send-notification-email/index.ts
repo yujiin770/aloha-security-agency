@@ -3,6 +3,10 @@
 // Sends a transactional email (applicant status change, interview invitation)
 // and records the attempt in public.email_logs.
 //
+// Staff only, with one exception: `{ kind: 'application_received', applicant_id,
+// reference_no }` may be called anonymously by the apply form to email the new
+// applicant their reference number. See handleReceipt() for why that is safe.
+//
 // The provider call is deliberately isolated behind `deliver()` — swap SMTP for
 // an HTTP API (Resend/SendGrid/SES) by changing that one function. If no
 // provider is configured the function still logs the message, so the rest of the
@@ -431,12 +435,246 @@ async function deliver(payload: Payload): Promise<SendResult> {
     : await sendViaResend(payload)
 }
 
+/**
+ * Writes the queued log row, delivers, then records the outcome on that row.
+ * Shared by the staff path and the public application receipt.
+ */
+async function sendAndLog(admin: SupabaseClient, body: Payload): Promise<SendResult> {
+  const { data: log } = await admin
+    .from('email_logs')
+    .insert({
+      to_email: body.to,
+      subject: body.subject,
+      template: body.template ?? null,
+      entity_type: body.entity_type ?? null,
+      entity_id: body.entity_id ?? null,
+      status: 'queued',
+    })
+    .select('id')
+    .single()
+
+  const result = await deliver(body)
+
+  if (log?.id) {
+    await admin
+      .from('email_logs')
+      .update({
+        status: result.ok ? 'sent' : 'failed',
+        provider_id: result.providerId ?? null,
+        error_message: result.error ?? null,
+        sent_at: result.ok ? new Date().toISOString() : null,
+      })
+      .eq('id', log.id)
+  }
+
+  return result
+}
+
+// ---------- public: application receipt ----------
+// The one thing an anonymous caller may ask for: "email my reference number to
+// the address on my application". It is NOT an open relay, because the caller
+// controls neither half of the message —
+//   * the recipient is read from the applicant row, never taken from the body;
+//   * the content is built here from a fixed template, never taken from the body;
+// and it is bounded: the caller must know both the applicant id and the
+// reference number (only the submitter has both), the application must be less
+// than RECEIPT_WINDOW_MS old, and a successful send is never repeated.
+
+const RECEIPT_TEMPLATE = 'applicant_received'
+const RECEIPT_WINDOW_MS = 60 * 60 * 1000
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+interface ReceiptRequest {
+  kind: 'application_received'
+  applicant_id?: unknown
+  reference_no?: unknown
+}
+
+function isReceiptRequest(body: unknown): body is ReceiptRequest {
+  return (
+    typeof body === 'object' &&
+    body !== null &&
+    (body as { kind?: unknown }).kind === 'application_received'
+  )
+}
+
+function esc(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+}
+
+/** Bare address out of `Name <addr>`, for the "write to us" line. */
+function bareAddress(value: string | undefined): string | null {
+  if (!value) return null
+  const cleaned = value.trim().replace(/^["']|["']$/g, '').trim()
+  const match = cleaned.match(/<\s*([^<>]+?)\s*>$/)
+  const address = (match ? match[1] : cleaned).trim()
+  return BARE_MAILBOX.test(address) ? address : null
+}
+
+/**
+ * Mirrors the layout in src/features/applicants/utils/emailTemplates.ts — this
+ * function is self-contained and cannot import it. Keep the two in step.
+ *
+ * APP_NAME and SUPPORT_EMAIL are optional secrets; without them the name falls
+ * back to the agency's and the support address to the sender's.
+ */
+function buildReceiptEmail(params: {
+  firstName: string
+  referenceNo: string
+  positionName: string | null
+  statusUrl: string | null
+}): { subject: string; html: string; text: string } {
+  const appName = Deno.env.get('APP_NAME') ?? 'Aloha Security Agency'
+  const support =
+    Deno.env.get('SUPPORT_EMAIL') ?? bareAddress(senderSecret()) ?? 'recruitment@alohasecurity.ph'
+  const { firstName, referenceNo, positionName, statusUrl } = params
+
+  const BRAND = '#0f172a'
+  const MUTED = '#64748b'
+  const BORDER = '#e2e8f0'
+  const p = (text: string) =>
+    `<p style="margin:0 0 14px;font-size:14px;line-height:1.65;color:#334155;">${text}</p>`
+
+  const role = positionName ? ` for the <strong>${esc(positionName)}</strong> position` : ''
+  const roleText = positionName ? ` for the ${positionName} position` : ''
+  const statusLine = statusUrl
+    ? `Keep this email. You can check the progress of your application at any time on our <a href="${esc(statusUrl)}" style="color:${BRAND};">status page</a> using this reference number and your surname.`
+    : 'Keep this email. You can check the progress of your application at any time on our status page using this reference number and your surname.'
+
+  const html = `
+<div style="margin:0;padding:24px;background:#f8fafc;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+  <div style="max-width:560px;margin:0 auto;background:#ffffff;border:1px solid ${BORDER};border-radius:12px;overflow:hidden;">
+    <div style="padding:20px 28px;border-bottom:1px solid ${BORDER};">
+      <span style="font-size:15px;font-weight:700;color:${BRAND};">${esc(appName)}</span>
+    </div>
+    <div style="padding:28px;">
+      <h1 style="margin:0 0 16px;font-size:19px;line-height:1.35;color:${BRAND};">We have received your application</h1>
+      ${p(`Hello ${esc(firstName)},`)}
+      ${p(`Thank you for applying to ${esc(appName)}${role}. Your application has been recorded and will be reviewed by our recruitment team.`)}
+      <div style="margin:0 0 14px;padding:14px 16px;background:#f1f5f9;border-left:3px solid ${BRAND};border-radius:6px;">
+        <div style="font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:${MUTED};">Your reference number</div>
+        <div style="margin-top:4px;font-size:20px;font-weight:700;color:${BRAND};font-family:ui-monospace,SFMono-Regular,Menlo,monospace;">${esc(referenceNo)}</div>
+      </div>
+      ${p(statusLine)}
+      ${p('We will email you again when there is an update. No action is needed from you in the meantime.')}
+    </div>
+    <div style="padding:18px 28px;border-top:1px solid ${BORDER};background:#f8fafc;">
+      <p style="margin:0;font-size:12px;line-height:1.6;color:${MUTED};">
+        Quote your reference number in any reply. Questions? Write to
+        <a href="mailto:${esc(support)}" style="color:${BRAND};">${esc(support)}</a>.
+      </p>
+      <p style="margin:12px 0 0;font-size:11px;color:${MUTED};">
+        This message was sent automatically — please do not treat it as an offer of employment.
+      </p>
+    </div>
+  </div>
+</div>`.trim()
+
+  const text = [
+    `Hello ${firstName},`,
+    '',
+    `Thank you for applying to ${appName}${roleText}. Your application has been recorded and will be reviewed by our recruitment team.`,
+    '',
+    `Your reference number: ${referenceNo}`,
+    '',
+    statusUrl
+      ? `Keep this email. You can check the progress of your application at any time at ${statusUrl} using this reference number and your surname.`
+      : 'Keep this email. You can check the progress of your application at any time on our status page using this reference number and your surname.',
+    '',
+    'We will email you again when there is an update. No action is needed from you in the meantime.',
+    '',
+    `Questions? Write to ${support}`,
+    '',
+    appName,
+  ].join('\n')
+
+  return { subject: `Application received — ${referenceNo}`, html, text }
+}
+
+async function handleReceipt(body: ReceiptRequest, origin: string | null): Promise<Response> {
+  const applicantId = typeof body.applicant_id === 'string' ? body.applicant_id : ''
+  const referenceNo = typeof body.reference_no === 'string' ? body.reference_no.trim() : ''
+
+  if (!UUID_RE.test(applicantId) || !referenceNo) {
+    throw new HttpError(400, 'applicant_id and reference_no are required')
+  }
+
+  const admin = adminClient()
+
+  const { data: applicant } = await admin
+    .from('applicants')
+    .select('id, first_name, email, reference_no, position_id, created_at')
+    .eq('id', applicantId)
+    .maybeSingle()
+
+  // One answer for "no such id" and "wrong reference", so the endpoint cannot be
+  // used to probe which ids exist.
+  if (!applicant || applicant.reference_no !== referenceNo) {
+    throw new HttpError(404, 'Application not found')
+  }
+
+  if (Date.now() - new Date(applicant.created_at).getTime() > RECEIPT_WINDOW_MS) {
+    throw new HttpError(403, 'The confirmation email for this application can no longer be requested')
+  }
+
+  const meta = {
+    template: RECEIPT_TEMPLATE,
+    entity_type: 'applicant',
+    entity_id: applicant.id as string,
+    dedupe: true,
+  }
+
+  if (await alreadySent(admin, { ...meta, to: '', subject: '', html: '' })) {
+    return jsonResponse({ sent: false, skipped: true, error: null }, 200, origin)
+  }
+
+  let positionName: string | null = null
+  if (applicant.position_id) {
+    const { data: position } = await admin
+      .from('positions')
+      .select('name')
+      .eq('id', applicant.position_id)
+      .maybeSingle()
+    positionName = position?.name ?? null
+  }
+
+  // Link back to the site the applicant actually used, but only when it is one
+  // we serve — the Origin header is caller-supplied.
+  const statusUrl = origin && allowedOrigins().includes(origin) ? `${origin}/status` : null
+
+  const email = buildReceiptEmail({
+    firstName: applicant.first_name,
+    referenceNo: applicant.reference_no,
+    positionName,
+    statusUrl,
+  })
+
+  const result = await sendAndLog(admin, { ...meta, to: applicant.email, ...email })
+
+  // The provider's error text is for the logs (email_logs.error_message), not
+  // for an anonymous browser.
+  return jsonResponse(
+    { sent: result.ok, skipped: false, error: result.ok ? null : 'Email could not be sent' },
+    result.ok ? 200 : 502,
+    origin,
+  )
+}
+
 Deno.serve(async (req) => {
   const pre = preflight(req)
   if (pre) return pre
   const origin = req.headers.get('origin')
 
   try {
+    const raw: unknown = await req.json().catch(() => null)
+
+    // The only unauthenticated path. Everything below it requires staff.
+    if (isReceiptRequest(raw)) return await handleReceipt(raw, origin)
+
     await requireCaller(req, [
       'owner',
       'admin',
@@ -444,7 +682,7 @@ Deno.serve(async (req) => {
       'hr_staff',
       'recruitment_officer',
     ])
-    const body = (await req.json()) as Payload
+    const body = raw as Payload
 
     if (!body?.to || !body?.subject || !body?.html) {
       throw new HttpError(400, 'to, subject and html are required')
@@ -461,32 +699,7 @@ Deno.serve(async (req) => {
       return jsonResponse({ sent: false, skipped: true, error: null }, 200, origin)
     }
 
-    const { data: log } = await admin
-      .from('email_logs')
-      .insert({
-        to_email: body.to,
-        subject: body.subject,
-        template: body.template ?? null,
-        entity_type: body.entity_type ?? null,
-        entity_id: body.entity_id ?? null,
-        status: 'queued',
-      })
-      .select('id')
-      .single()
-
-    const result = await deliver(body)
-
-    if (log?.id) {
-      await admin
-        .from('email_logs')
-        .update({
-          status: result.ok ? 'sent' : 'failed',
-          provider_id: result.providerId ?? null,
-          error_message: result.error ?? null,
-          sent_at: result.ok ? new Date().toISOString() : null,
-        })
-        .eq('id', log.id)
-    }
+    const result = await sendAndLog(admin, body)
 
     return jsonResponse(
       { sent: result.ok, skipped: false, error: result.error ?? null },

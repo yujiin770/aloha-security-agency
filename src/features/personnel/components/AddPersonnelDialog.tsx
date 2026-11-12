@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { useForm, useWatch } from 'react-hook-form'
 import { z } from 'zod'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
@@ -10,6 +11,8 @@ import { useToast } from '@/components/ui/Toast'
 import { errorMessage } from '@/lib/errors'
 import { queryKeys } from '@/lib/queryKeys'
 import { usePositions, useRanksForPosition } from '@/features/config/hooks/useConfig'
+import { useDialogDraft } from '@/hooks/useDialogDraft'
+import { DraftNotice } from '@/components/ui/DraftNotice'
 import { createPersonnel } from '../api/personnelApi'
 
 const PH_PHONE = /^(\+63|0)9\d{9}$/
@@ -80,7 +83,16 @@ const blankToNull = (value: string | undefined) => (value?.trim() ? value.trim()
  * Adds a guard who was already employed before the system existed, straight
  * onto the roster with no application behind them.
  */
-export function AddPersonnelDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
+export function AddPersonnelDialog({
+  open,
+  onClose,
+  onResume,
+}: {
+  open: boolean
+  onClose: () => void
+  /** Opens the dialog when unsaved work from an earlier visit is found. */
+  onResume?: () => void
+}) {
   const toast = useToast()
   const qc = useQueryClient()
   const navigate = useNavigate()
@@ -95,6 +107,27 @@ export function AddPersonnelDialog({ open, onClose }: { open: boolean; onClose: 
     form.reset(DEFAULTS)
     onClose()
   }
+
+  // Unsaved work survives a refresh: the parent reopens the dialog with it.
+  // Waits for positions so the restored position select has its option.
+  const draft = useDialogDraft({
+    id: 'personnel.add',
+    form,
+    open,
+    recordId: null,
+    ready: positions.isSuccess,
+    onResume: () => onResume?.(),
+  })
+
+  // The rank select is uncontrolled and its options load only after a position
+  // is set. When a restored draft sets both at once, the DOM picked "No rank"
+  // before the rank's option existed while the form still holds the rank —
+  // re-applying the value once the options arrive makes the two agree.
+  useEffect(() => {
+    if (!ranks.data) return
+    const rankId = form.getValues('rank_id')
+    if (rankId) form.setValue('rank_id', rankId)
+  }, [ranks.data, form])
 
   const create = useMutation({
     mutationFn: (values: FormValues) =>
@@ -155,6 +188,7 @@ export function AddPersonnelDialog({ open, onClose }: { open: boolean; onClose: 
         </>
       }
     >
+      <DraftNotice restoredAt={draft.restoredAt} onDiscard={draft.discard} />
       <form className="space-y-6" noValidate onSubmit={(e) => e.preventDefault()}>
         <fieldset className="space-y-4">
           <legend className="mb-3 text-xs font-semibold tracking-wider text-[var(--app-text-subtle)] uppercase">

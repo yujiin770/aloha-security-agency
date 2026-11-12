@@ -22,6 +22,8 @@ import {
 import { ADMIN_ROLES } from '@/utils/constants'
 import { formatDate } from '@/utils/format'
 import type { AccreditationRow } from '@/types/database.types'
+import { useDialogDraft } from '@/hooks/useDialogDraft'
+import { DraftNotice } from '@/components/ui/DraftNotice'
 import { ContentToolbar } from './components/ContentToolbar'
 
 const schema = z.object({
@@ -95,6 +97,22 @@ export default function AccreditationsPage() {
     setEditing(row)
     setDialogOpen(true)
   }
+
+  // Unsaved create/edit work survives a refresh: the dialog reopens with it.
+  // The image is held outside the form and is not part of the draft.
+  const draft = useDialogDraft({
+    id: 'cms.accreditations',
+    form,
+    open: dialogOpen,
+    recordId: editing?.id ?? null,
+    ready: accreditations.isSuccess,
+    onResume: (recordId) => {
+      if (recordId === null) return openCreate()
+      const row = accreditations.data?.find((r) => r.id === recordId)
+      if (!row) return false
+      openEdit(row)
+    },
+  })
 
   async function onSubmit(values: FormValues) {
     const payload = {
@@ -274,6 +292,7 @@ export default function AccreditationsPage() {
           </>
         }
       >
+        <DraftNotice restoredAt={draft.restoredAt} onDiscard={draft.discard} />
         <form className="space-y-5" noValidate>
           <div className="grid gap-4 sm:grid-cols-2">
             <Field

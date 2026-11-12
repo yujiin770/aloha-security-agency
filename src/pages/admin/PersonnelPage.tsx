@@ -239,7 +239,11 @@ export default function PersonnelPage() {
         }
       />
 
-      <AddPersonnelDialog open={addOpen} onClose={() => setAddOpen(false)} />
+      <AddPersonnelDialog
+        open={addOpen}
+        onClose={() => setAddOpen(false)}
+        onResume={() => setAddOpen(true)}
+      />
 
       {!stats.isError && (
         <section aria-label="Roster summary" className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">

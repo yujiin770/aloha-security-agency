@@ -9,6 +9,8 @@ import { Button } from '@/components/ui/Button'
 import { Checkbox, Field, Input, Textarea } from '@/components/ui/Field'
 import { ConfirmDialog, Modal } from '@/components/ui/Modal'
 import { InactiveToggle } from '@/components/ui/InactiveToggle'
+import { DraftNotice } from '@/components/ui/DraftNotice'
+import { useDialogDraft } from '@/hooks/useDialogDraft'
 import { useToast } from '@/components/ui/Toast'
 import { Can } from '@/app/guards'
 import { errorMessage } from '@/lib/errors'
@@ -119,6 +121,21 @@ export default function RanksPage() {
     setEditing(rank)
     setDialogOpen(true)
   }
+
+  // Unsaved create/edit work survives a refresh: the dialog reopens with it.
+  const draft = useDialogDraft({
+    id: 'ranks',
+    form,
+    open: dialogOpen,
+    recordId: editing?.id ?? null,
+    ready: ranks.isSuccess,
+    onResume: (recordId) => {
+      if (recordId === null) return openCreate()
+      const rank = ranks.data?.find((r) => r.id === recordId)
+      if (!rank) return false
+      openEdit(rank)
+    },
+  })
 
   async function onSubmit(values: FormValues) {
     const payload = {
@@ -294,6 +311,7 @@ export default function RanksPage() {
           </>
         }
       >
+        <DraftNotice restoredAt={draft.restoredAt} onDiscard={draft.discard} />
         <form className="space-y-4" noValidate>
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="Name" required error={errors.name?.message}>

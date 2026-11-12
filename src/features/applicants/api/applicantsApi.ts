@@ -110,6 +110,36 @@ export async function submitApplication(
   }
 }
 
+/**
+ * Emails the applicant their reference number right after they submit.
+ *
+ * Uses the one public mode of `send-notification-email`: only the applicant id
+ * and reference number are sent. The function reads the recipient from the
+ * applicant row and builds the message itself, so this cannot be used to mail
+ * anyone else or anything else.
+ *
+ * Never throws. The application is already recorded and the reference number is
+ * on screen; a mail failure must not read as a failed submission.
+ */
+export async function sendApplicationReceipt(receipt: ApplicationReceipt): Promise<boolean> {
+  try {
+    const { data, error } = await supabase.functions.invoke<{
+      sent: boolean
+      skipped?: boolean
+    }>('send-notification-email', {
+      body: {
+        kind: 'application_received',
+        applicant_id: receipt.id,
+        reference_no: receipt.reference_no,
+      },
+    })
+    if (error) return false
+    return Boolean(data?.sent || data?.skipped)
+  } catch {
+    return false
+  }
+}
+
 export async function checkApplicationStatus(
   referenceNo: string,
   lastName: string,

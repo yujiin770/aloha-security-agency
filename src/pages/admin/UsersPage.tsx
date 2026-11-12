@@ -13,6 +13,8 @@ import { Badge } from '@/components/ui/Badge'
 import { Field, Input, Select } from '@/components/ui/Field'
 import { ConfirmDialog, Modal } from '@/components/ui/Modal'
 import { InactiveToggle } from '@/components/ui/InactiveToggle'
+import { DraftNotice } from '@/components/ui/DraftNotice'
+import { useDialogDraft } from '@/hooks/useDialogDraft'
 import { useToast } from '@/components/ui/Toast'
 import { queryKeys } from '@/lib/queryKeys'
 import { errorMessage } from '@/lib/errors'
@@ -46,6 +48,9 @@ const createSchema = z.object({
 })
 
 type CreateValues = z.infer<typeof createSchema>
+
+/** Credentials never go into a stored draft. */
+const DRAFT_OMIT: readonly (keyof CreateValues)[] = ['password']
 
 /**
  * A readable throwaway password for the admin to hand over. Kept in plain
@@ -104,6 +109,20 @@ export default function UsersPage() {
     })
     setCreateOpen(true)
   }
+
+  // Unsaved work survives a refresh: the dialog reopens with it. The password
+  // is never stored — a resumed form gets a freshly generated one.
+  const draft = useDialogDraft({
+    id: 'users',
+    form,
+    open: createOpen,
+    recordId: null,
+    omit: DRAFT_OMIT,
+    // The role select's options come from this query; restoring before it
+    // lands would leave the select blank while the form holds the role.
+    ready: !roles.isPending,
+    onResume: () => openCreate(),
+  })
 
   const create = useMutation({
     mutationFn: (values: CreateValues) =>
@@ -318,6 +337,7 @@ export default function UsersPage() {
           </>
         }
       >
+        <DraftNotice restoredAt={draft.restoredAt} onDiscard={draft.discard} />
         <form className="space-y-4" noValidate>
           <div className="grid gap-4 sm:grid-cols-2">
             <Field

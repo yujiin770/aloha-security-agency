@@ -228,7 +228,7 @@ Deliberately in the database, because the UI can be bypassed:
 
 | Rule | Enforced by |
 |---|---|
-| Applicants must be 18+ | `applicants_age_chk` |
+| Applicants must be 21+ | `applicants_age_chk` |
 | A rejection needs a reason | `applicants_rejection_reason_chk` |
 | Only legal pipeline moves | `validate_applicant_transition()` trigger |
 | No double-booked guards | `deployments_no_overlap` exclusion constraint |
