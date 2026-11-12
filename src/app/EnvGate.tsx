@@ -7,7 +7,7 @@ import { envErrors, isConfigured } from '@/lib/env'
  *
  * Without Supabase credentials the app cannot do anything useful, and every
  * query would fail with an opaque network error. Rather than render a broken
- * shell, show the person exactly what is missing and how to fix it.
+ * shell, show  person exactly what is missing and how to fix it.
  */
 export function EnvGate({ children }: { children: ReactNode }) {
   if (isConfigured) return <>{children}</>
