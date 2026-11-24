@@ -73,29 +73,44 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Guards against a slow profile fetch resolving after the user has signed
   // out, which would otherwise repopulate state for a dead session.
   const activeUserId = useRef<string | null>(null)
+  // The user whose profile is already loaded. Supabase re-emits SIGNED_IN for
+  // the same user whenever the tab regains focus or visibility — including on
+  // return from a native file picker. Treating that as a fresh sign-in put
+  // every guard back into its loading state, which unmounted the page and
+  // threw away whatever was on it (a chosen file, unsaved import rows).
+  const loadedUserId = useRef<string | null>(null)
 
   const loadUser = useCallback(async (nextSession: Session | null) => {
     const authUser = nextSession?.user
     activeUserId.current = authUser?.id ?? null
 
     if (!authUser) {
+      loadedUserId.current = null
       setUser(null)
       setIsUnprovisioned(false)
       setIsProfileLoading(false)
       return
     }
 
+    // Same person as before: refresh roles and permissions in the background
+    // without blocking the UI. Only a new identity needs the guards to wait.
+    const isSameUser = loadedUserId.current === authUser.id
+
     // Set synchronously, before the first await, so the guards never observe a
     // gap between "signed in" and "profile loading".
-    setIsProfileLoading(true)
+    if (!isSameUser) setIsProfileLoading(true)
 
     try {
       const sessionUser = await fetchSessionUser(authUser.id, authUser.email ?? '')
       if (activeUserId.current !== authUser.id) return
       setUser(sessionUser)
       setIsUnprovisioned(sessionUser === null)
+      loadedUserId.current = sessionUser ? authUser.id : null
     } catch {
       if (activeUserId.current !== authUser.id) return
+      // A failed background refresh keeps the profile already on screen;
+      // only a first load with no profile at all means "not provisioned".
+      if (isSameUser) return
       setUser(null)
       setIsUnprovisioned(true)
     } finally {
@@ -127,6 +142,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         if (event === 'SIGNED_OUT') {
           activeUserId.current = null
+          loadedUserId.current = null
           setUser(null)
           setIsUnprovisioned(false)
           setIsProfileLoading(false)

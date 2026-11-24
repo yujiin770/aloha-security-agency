@@ -5,6 +5,7 @@ import type {
   DeploymentStatus,
   DocumentType,
   EmploymentStatus,
+  PersonnelActionType,
   ShiftType,
   ToneToken,
 } from '@/types/database.types'
@@ -102,6 +103,37 @@ export const EMPLOYMENT_STATUSES: EnumMeta<EmploymentStatus>[] = [
   { value: 'terminated', label: 'Terminated', tone: 'danger' },
 ]
 
+/** 0027 — labels for the violation / status-change log. */
+export const PERSONNEL_ACTION_TYPES: EnumMeta<PersonnelActionType>[] = [
+  { value: 'violation', label: 'Violation / offense', tone: 'warning' },
+  { value: 'suspension', label: 'Suspended', tone: 'danger' },
+  { value: 'suspension_lifted', label: 'Suspension lifted', tone: 'success' },
+  { value: 'resignation', label: 'Resigned', tone: 'neutral' },
+  { value: 'termination', label: 'Terminated', tone: 'danger' },
+  { value: 'blocklist', label: 'Blocklisted', tone: 'danger' },
+  { value: 'rehire', label: 'Re-hired', tone: 'success' },
+  { value: 'note', label: 'Note', tone: 'neutral' },
+]
+
+/**
+ * Suggestions for the offense field. Free text is still accepted — these are
+ * the ones that recur in the client roster sheets.
+ */
+export const COMMON_OFFENSES = [
+  'Absence without leave (AWOL)',
+  'Habitual absenteeism',
+  'Habitual tardiness',
+  'Sleeping on post',
+  'Abandonment of post',
+  'Insubordination',
+  'Improper uniform / grooming',
+  'Under the influence of alcohol or drugs on duty',
+  'Negligence of duty',
+  'Misconduct / unbecoming behavior',
+  'Loss or misuse of company property',
+  'Dishonesty / falsification',
+] as const
+
 export const DEPLOYMENT_STATUSES: EnumMeta<DeploymentStatus>[] = [
   { value: 'pending', label: 'Pending', tone: 'warning' },
   { value: 'active', label: 'Active', tone: 'success' },
@@ -196,6 +228,7 @@ function metaLookup<T extends string>(list: EnumMeta<T>[]) {
 
 export const applicantStatusMeta = metaLookup(APPLICANT_STATUSES)
 export const employmentStatusMeta = metaLookup(EMPLOYMENT_STATUSES)
+export const personnelActionMeta = metaLookup(PERSONNEL_ACTION_TYPES)
 export const deploymentStatusMeta = metaLookup(DEPLOYMENT_STATUSES)
 export const shiftMeta = metaLookup(SHIFTS)
 export const documentTypeMeta = metaLookup(DOCUMENT_TYPES)

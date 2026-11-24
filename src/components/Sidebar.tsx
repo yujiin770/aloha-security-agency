@@ -95,7 +95,7 @@ const SECTIONS: { heading: string; items: NavItem[] }[] = [
       },
       {
         to: '/admin/facilities',
-        label: 'Facilities',
+        label: 'Post / Area',
         icon: Building2,
         permission: 'pages.facilities',
       },

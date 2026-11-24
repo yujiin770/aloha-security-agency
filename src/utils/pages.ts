@@ -42,7 +42,7 @@ export const PAGES: PageDefinition[] = [
   },
   {
     key: 'pages.facilities',
-    label: 'Facilities',
+    label: 'Post / Area',
     description: 'Client sites, coordinators and headcount',
   },
   {

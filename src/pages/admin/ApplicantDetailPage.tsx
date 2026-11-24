@@ -47,11 +47,11 @@ import {
   documentTypeMeta,
   sortByPipeline,
   ADMIN_ROLES,
+  SHIFTS,
 } from '@/utils/constants'
-import {
-  usePositionLookup,
-  useRanksForPosition,
-} from '@/features/config/hooks/useConfig'
+import { usePositionLookup } from '@/features/config/hooks/useConfig'
+import { listBranchOptions } from '@/features/branches/api/branchesApi'
+import type { ShiftType } from '@/types/database.types'
 import {
   calculateAge,
   formatCurrency,
@@ -105,7 +105,9 @@ export default function ApplicantDetailPage() {
   const [note, setNote] = useState('')
   const [notify, setNotify] = useState(true)
   const [hireOpen, setHireOpen] = useState(false)
-  const [rankId, setRankId] = useState('')
+  // The facility the new hire is deployed to (0028); starts on their preferred one.
+  const [facilityId, setFacilityId] = useState('')
+  const [shift, setShift] = useState<ShiftType>('day')
 
   const applicant = useQuery({
     queryKey: queryKeys.applicants.detail(id),
@@ -114,8 +116,12 @@ export default function ApplicantDetailPage() {
   })
 
   const positionLookup = usePositionLookup()
-  // Only the ranks configured for this applicant's position are offered.
-  const availableRanks = useRanksForPosition(applicant.data?.position_id)
+  const facilities = useQuery({
+    queryKey: queryKeys.branches.options(),
+    queryFn: listBranchOptions,
+    staleTime: 5 * 60_000,
+    enabled: hireOpen,
+  })
 
   const documents = useQuery({
     queryKey: queryKeys.applicants.documents(id),
@@ -173,7 +179,11 @@ export default function ApplicantDetailPage() {
     // the one status change that most warrants an email would be the only one
     // that never sent one.
     mutationFn: async () => {
-      const person = await hireApplicant({ applicantId: id, rankId: rankId || undefined })
+      const person = await hireApplicant({
+        applicantId: id,
+        branchId: facilityId || undefined,
+        shift,
+      })
       const applicantRow = applicant.data
       const notification =
         notify && applicantRow
@@ -198,6 +208,8 @@ export default function ApplicantDetailPage() {
       setHireOpen(false)
       void qc.invalidateQueries({ queryKey: queryKeys.applicants.all })
       void qc.invalidateQueries({ queryKey: queryKeys.personnel.all })
+      void qc.invalidateQueries({ queryKey: queryKeys.deployments.all })
+      void qc.invalidateQueries({ queryKey: queryKeys.branches.all })
       navigate(`/admin/personnel/${person.id}`)
     },
     onError: (error) => toast.error('Could not onboard applicant', errorMessage(error)),
@@ -256,9 +268,10 @@ export default function ApplicantDetailPage() {
     id: `applicant.hire:${id}`,
     open: hireOpen,
     recordId: id,
-    values: { rankId, notify },
+    values: { facilityId, shift, notify },
     apply: (v) => {
-      if (v.rankId !== undefined) setRankId(v.rankId)
+      if (v.facilityId !== undefined) setFacilityId(v.facilityId)
+      if (v.shift !== undefined) setShift(v.shift)
       if (v.notify !== undefined) setNotify(v.notify)
     },
     ready: applicant.isSuccess,
@@ -364,7 +377,10 @@ export default function ApplicantDetailPage() {
               <Can roles={[...ADMIN_ROLES, 'hr_staff']}>
                 <Button
                   leftIcon={<UserPlus className="h-4 w-4" />}
-                  onClick={() => setHireOpen(true)}
+                  onClick={() => {
+                    setFacilityId(a.preferred_branch_id ?? '')
+                    setHireOpen(true)
+                  }}
                 >
                   Mark as Hired
                 </Button>
@@ -807,23 +823,30 @@ export default function ApplicantDetailPage() {
           </p>
 
           <Field
-            label="Rank"
+            label="Facility"
             hint={
-              availableRanks.isLoading
-                ? 'Loading ranks…'
-                : `Configured for ${positionLookup.name(a.position_id)}. Manage these under Configuration → Ranks.`
+              facilities.isLoading
+                ? 'Loading area…'
+                : 'Where they will be deployed, starting today. Leave blank to assign later from Deployments.'
             }
           >
             <Select
-              placeholder="No rank"
-              value={rankId}
-              onChange={(e) => setRankId(e.target.value)}
-              options={(availableRanks.data ?? []).map((r) => ({
-                value: r.id,
-                label: r.name,
-              }))}
+              placeholder="Not yet assigned"
+              value={facilityId}
+              onChange={(e) => setFacilityId(e.target.value)}
+              options={(facilities.data ?? []).map((b) => ({ value: b.id, label: b.name }))}
             />
           </Field>
+
+          {facilityId && (
+            <Field label="Shift">
+              <Select
+                value={shift}
+                onChange={(e) => setShift(e.target.value as ShiftType)}
+                options={SHIFTS.map((x) => ({ value: x.value, label: x.label }))}
+              />
+            </Field>
+          )}
 
           <div className="border-t border-[var(--app-border)] pt-4">
             <Checkbox

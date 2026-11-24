@@ -265,8 +265,7 @@ export default function DeploymentsPage() {
             {row.personnel_name}
           </Link>
           <p className="truncate font-mono text-xs text-[var(--app-text-subtle)]">
-            {row.employee_no} · {row.position_name}
-            {row.rank_name ? ` · ${row.rank_name}` : ''}
+            {row.employee_no}
           </p>
         </div>
       ),
@@ -390,8 +389,6 @@ export default function DeploymentsPage() {
       [
         { key: 'employee_no', header: 'Employee no.' },
         { key: 'personnel_name', header: 'Personnel' },
-        { key: 'position_name', header: 'Position' },
-        { key: 'rank_name', header: 'Rank' },
         { key: 'branch_code', header: 'Branch code' },
         { key: 'branch_name', header: 'Branch' },
         { key: 'post_assignment', header: 'Post' },
@@ -468,7 +465,7 @@ export default function DeploymentsPage() {
             tone={(d?.branches.vacancies ?? 0) > 0 ? 'danger' : 'neutral'}
             label="Open posts"
             value={d?.branches.vacancies ?? 0}
-            caption={`Across ${d?.branches.active ?? 0} active facilities`}
+            caption={`Across ${d?.branches.active ?? 0} active area`}
             to="/admin/facilities"
             isLoading={stats.isLoading}
           />
@@ -662,7 +659,7 @@ export default function DeploymentsPage() {
                 branchQuery.isLoading
                   ? 'Loading…'
                   : branches.length === 0 && !branchQuery.isError
-                    ? 'No active facilities — add one on the Facilities page.'
+                    ? 'No active area — add one on the Area page.'
                     : undefined
               }
             >

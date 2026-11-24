@@ -1,13 +1,25 @@
 import { useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, Mail, MapPinned, Phone, UserMinus } from 'lucide-react'
+import { useQuery } from '@tanstack/react-query'
+import {
+  AlertOctagon,
+  ArrowLeft,
+  Ban,
+  FileDown,
+  Mail,
+  MapPinned,
+  PauseCircle,
+  Phone,
+  PlayCircle,
+  ShieldAlert,
+  UserCheck,
+  UserMinus,
+  UserX,
+} from 'lucide-react'
 import { PageHeader } from '@/components/PageHeader'
 import { Card, CardHeader } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
-import { Field, Input, Select } from '@/components/ui/Field'
-import { Modal } from '@/components/ui/Modal'
 import { ErrorState, LoadingState } from '@/components/ui/Feedback'
 import { useToast } from '@/components/ui/Toast'
 import { Can } from '@/app/guards'
@@ -16,8 +28,14 @@ import { errorMessage } from '@/lib/errors'
 import {
   getPersonnel,
   getPersonnelDeployments,
-  separatePersonnel,
+  listPersonnelActions,
 } from '@/features/personnel/api/personnelApi'
+import {
+  PersonnelActionDialog,
+  type PersonnelActionKind,
+} from '@/features/personnel/components/PersonnelActionDialog'
+import { PersonnelActionLog } from '@/features/personnel/components/PersonnelActionLog'
+import { downloadPersonalDataSheet } from '@/features/personnel/export/personalDataSheet'
 import { listBranches } from '@/features/branches/api/branchesApi'
 import {
   deploymentStatusMeta,
@@ -25,7 +43,6 @@ import {
   shiftMeta,
   ADMIN_ROLES,
 } from '@/utils/constants'
-import { usePositionLookup, useRankLookup } from '@/features/config/hooks/useConfig'
 import {
   formatCurrency,
   formatDate,
@@ -33,27 +50,29 @@ import {
   humanize,
   maskId,
 } from '@/utils/format'
-import { useStateDraft } from '@/hooks/useStateDraft'
-import { DraftNotice } from '@/components/ui/DraftNotice'
-import type { EmploymentStatus } from '@/types/database.types'
+
+/** Administrators and HR — mirrors assert_can_discipline_personnel() (0027). */
+const DISCIPLINE_ROLES = [...ADMIN_ROLES, 'hr_staff'] as const
 
 export default function PersonnelDetailPage() {
   const { id = '' } = useParams()
+  const [action, setAction] = useState<PersonnelActionKind | null>(null)
+  const [exporting, setExporting] = useState(false)
   const toast = useToast()
-  const qc = useQueryClient()
-
-  const [separateOpen, setSeparateOpen] = useState(false)
-  const [separationStatus, setSeparationStatus] =
-    useState<Extract<EmploymentStatus, 'resigned' | 'terminated'>>('resigned')
-  const [separationDate, setSeparationDate] = useState(
-    new Date().toISOString().slice(0, 10),
-  )
 
   const person = useQuery({
     queryKey: queryKeys.personnel.detail(id),
     queryFn: () => getPersonnel(id),
     enabled: Boolean(id),
   })
+
+  // Same cache entry as the history card below, so this costs no extra request.
+  const actions = useQuery({
+    queryKey: queryKeys.personnel.actions(id),
+    queryFn: () => listPersonnelActions(id),
+    enabled: Boolean(id),
+  })
+  const rehires = (actions.data ?? []).filter((a) => a.action_type === 'rehire')
 
   const deployments = useQuery({
     queryKey: queryKeys.personnel.deployments(id),
@@ -67,61 +86,15 @@ export default function PersonnelDetailPage() {
     staleTime: 5 * 60_000,
   })
 
-  const positionLookup = usePositionLookup()
-  const rankLookup = useRankLookup()
 
-  // Shown in the separation dialog so the operator sees what closing this
-  // employment will also close.
+  // Shown in the separation / blocklist dialogs so the operator sees what
+  // closing this employment will also close.
   const openDeployments = (deployments.data ?? [])
     .filter((d) => d.status === 'pending' || d.status === 'active')
     .map((d) => ({
       ...d,
       branch_name: branches.data?.find((b) => b.id === d.branch_id)?.name ?? null,
     }))
-
-  const separate = useMutation({
-    mutationFn: () =>
-      separatePersonnel({
-        id,
-        status: separationStatus,
-        dateSeparated: separationDate,
-      }),
-    onSuccess: (_data, _vars) => {
-      toast.success(
-        'Separation recorded',
-        openDeployments.length > 0
-          ? `${openDeployments.length} open deployment(s) were ended.`
-          : undefined,
-      )
-      setSeparateOpen(false)
-      // Separation now writes to `deployments` as well, and the facility
-      // headcount views read from it — so the branch and dashboard caches are
-      // stale too, not just the roster.
-      void qc.invalidateQueries({ queryKey: queryKeys.personnel.all })
-      void qc.invalidateQueries({ queryKey: queryKeys.deployments.all })
-      void qc.invalidateQueries({ queryKey: queryKeys.branches.all })
-      void qc.invalidateQueries({ queryKey: queryKeys.reports.all })
-    },
-    onError: (error) => toast.error('Could not update record', errorMessage(error)),
-  })
-
-  // Unsaved separation input survives a refresh: the dialog reopens with it,
-  // unless the person is no longer active. Scoped by personnel id.
-  const separateDraft = useStateDraft({
-    id: `personnel.separate:${id}`,
-    open: separateOpen,
-    recordId: id,
-    values: { separationStatus, separationDate },
-    apply: (v) => {
-      if (v.separationStatus !== undefined) setSeparationStatus(v.separationStatus)
-      if (v.separationDate !== undefined) setSeparationDate(v.separationDate)
-    },
-    ready: person.isSuccess,
-    onResume: () => {
-      if (person.data?.employment_status !== 'active') return false
-      setSeparateOpen(true)
-    },
-  })
 
   if (person.isLoading) return <LoadingState label="Loading personnel record…" />
 
@@ -149,6 +122,24 @@ export default function PersonnelDetailPage() {
 
   const p = person.data
   const statusMeta = employmentStatusMeta(p.employment_status)
+  const employed = ['active', 'on_leave', 'suspended'].includes(p.employment_status)
+  const canRehire = p.employment_status === 'resigned' && !p.is_blocklisted
+
+  async function exportPds() {
+    setExporting(true)
+    try {
+      await downloadPersonalDataSheet({ person: p })
+      toast.success('Personal Data Sheet downloaded')
+    } catch (error) {
+      toast.error('Could not export', errorMessage(error))
+    } finally {
+      setExporting(false)
+    }
+  }
+
+  // The facility is the live deployment: the active one, else the upcoming one.
+  const currentFacility =
+    openDeployments.find((d) => d.status === 'active') ?? openDeployments[0] ?? null
   const branchName = (branchId: string) =>
     branches.data?.find((b) => b.id === branchId)?.name ?? branchId
 
@@ -163,12 +154,10 @@ export default function PersonnelDetailPage() {
         description={
           <span className="flex flex-wrap items-center gap-2">
             <span className="font-mono">{p.employee_no}</span>
-            <span aria-hidden="true">·</span>
-            <span>{positionLookup.name(p.position_id)}</span>
-            {p.rank_id && (
+            {currentFacility && (
               <>
                 <span aria-hidden="true">·</span>
-                <span>{rankLookup.name(p.rank_id)}</span>
+                <span>{currentFacility.branch_name ?? 'Facility'}</span>
               </>
             )}
           </span>
@@ -178,20 +167,62 @@ export default function PersonnelDetailPage() {
             <Badge tone={statusMeta?.tone ?? 'neutral'} dot>
               {statusMeta?.label}
             </Badge>
-            {p.employment_status === 'active' && (
-              <Can roles={[...ADMIN_ROLES, 'hr_staff']}>
+            {p.is_blocklisted && (
+              <Badge tone="danger" dot>
+                Blocklisted
+              </Badge>
+            )}
+            {rehires.length > 0 && (
+              <span title={`Last re-hired ${formatDate(rehires[0]!.effective_date)}`}>
+                <Badge tone="info" dot>
+                  Re-hired{rehires.length > 1 ? ` ×${rehires.length}` : ''}
+                </Badge>
+              </span>
+            )}
+            {/* Full government ID numbers: administrators and HR only. */}
+            <Can roles={[...DISCIPLINE_ROLES]}>
+              <Button
+                variant="secondary"
+                leftIcon={<FileDown className="h-4 w-4" />}
+                onClick={() => void exportPds()}
+                isLoading={exporting}
+              >
+                Export PDS
+              </Button>
+            </Can>
+            {canRehire && (
+              <Can roles={[...DISCIPLINE_ROLES]}>
                 <Button
-                  variant="secondary"
-                  leftIcon={<UserMinus className="h-4 w-4" />}
-                  onClick={() => setSeparateOpen(true)}
+                  leftIcon={<UserCheck className="h-4 w-4" />}
+                  onClick={() => setAction('rehire')}
                 >
-                  Record separation
+                  Re-hire
                 </Button>
               </Can>
             )}
           </>
         }
       />
+
+      {p.is_blocklisted && (
+        <div
+          role="note"
+          className="mb-6 flex gap-3 rounded-lg border border-danger/40 bg-danger/5 px-4 py-3"
+        >
+          <AlertOctagon className="mt-0.5 h-5 w-5 shrink-0 text-danger" aria-hidden="true" />
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-[var(--app-text)]">
+              Blocklisted — removed from the company effective {formatDate(p.blocklisted_on)}
+            </p>
+            <p className="mt-0.5 text-sm whitespace-pre-line text-[var(--app-text-muted)]">
+              {p.blocklist_reason}
+            </p>
+            <p className="mt-1 text-xs text-[var(--app-text-subtle)]">
+              This person cannot be re-hired or apply again with the same email address.
+            </p>
+          </div>
+        </div>
+      )}
 
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">
@@ -201,10 +232,29 @@ export default function PersonnelDetailPage() {
               {(
                 [
                   ['Employee number', p.employee_no],
-                  ['Position', positionLookup.name(p.position_id)],
-                  ['Rank', rankLookup.name(p.rank_id)],
+                  [
+                    'Facility',
+                    currentFacility
+                      ? `${currentFacility.branch_name ?? 'Facility'} · ${humanize(currentFacility.shift)} shift${
+                          currentFacility.status === 'pending'
+                            ? ` (starts ${formatDate(currentFacility.start_date)})`
+                            : ''
+                        }`
+                      : 'Not assigned',
+                  ],
                   ['Date hired', formatDate(p.date_hired)],
                   ['Status', statusMeta?.label ?? '—'],
+                  ['Status effective', formatDate(p.status_effective_date)],
+                  ...(rehires.length > 0
+                    ? ([
+                        [
+                          'Re-hired',
+                          `${formatDate(rehires[0]!.effective_date)}${
+                            rehires.length > 1 ? ` (${rehires.length} times)` : ''
+                          }`,
+                        ],
+                      ] as [string, string][])
+                    : []),
                   ['Date separated', formatDate(p.date_separated)],
                 ] as [string, string][]
               ).map(([term, value]) => (
@@ -225,6 +275,7 @@ export default function PersonnelDetailPage() {
                 [
                   ['Date of birth', formatDate(p.birth_date)],
                   ['Sex', humanize(p.sex)],
+                  ['Address', p.address ?? '—'],
                   ['SSS', maskId(p.sss_no)],
                   ['PhilHealth', maskId(p.philhealth_no)],
                   ['Pag-IBIG', maskId(p.pagibig_no)],
@@ -244,6 +295,8 @@ export default function PersonnelDetailPage() {
               ))}
             </dl>
           </Card>
+
+          <PersonnelActionLog personnelId={p.id} />
 
           <Card padded={false}>
             <CardHeader
@@ -290,6 +343,78 @@ export default function PersonnelDetailPage() {
         </div>
 
         <div className="space-y-6">
+          {!p.is_blocklisted && (
+            <Can roles={[...DISCIPLINE_ROLES]}>
+              <Card padded={false}>
+                <CardHeader
+                  title="Disciplinary and status actions"
+                  icon={<ShieldAlert className="h-4 w-4" aria-hidden="true" />}
+                />
+                <div className="flex flex-col gap-2 p-5">
+                  <Button
+                    variant="secondary"
+                    leftIcon={<AlertOctagon className="h-4 w-4" />}
+                    onClick={() => setAction('violation')}
+                  >
+                    Record violation / offense
+                  </Button>
+                  {(p.employment_status === 'active' || p.employment_status === 'on_leave') && (
+                    <Button
+                      variant="secondary"
+                      leftIcon={<PauseCircle className="h-4 w-4" />}
+                      onClick={() => setAction('suspend')}
+                    >
+                      Suspend
+                    </Button>
+                  )}
+                  {p.employment_status === 'suspended' && (
+                    <Button
+                      variant="secondary"
+                      leftIcon={<PlayCircle className="h-4 w-4" />}
+                      onClick={() => setAction('lift')}
+                    >
+                      Lift suspension
+                    </Button>
+                  )}
+                  {employed && (
+                    <>
+                      <Button
+                        variant="secondary"
+                        leftIcon={<UserMinus className="h-4 w-4" />}
+                        onClick={() => setAction('resign')}
+                      >
+                        Record resignation
+                      </Button>
+                      <Button
+                        variant="secondary"
+                        leftIcon={<UserX className="h-4 w-4" />}
+                        onClick={() => setAction('terminate')}
+                      >
+                        Terminate
+                      </Button>
+                    </>
+                  )}
+                  {canRehire && (
+                    <Button
+                      variant="secondary"
+                      leftIcon={<UserCheck className="h-4 w-4" />}
+                      onClick={() => setAction('rehire')}
+                    >
+                      Re-hire
+                    </Button>
+                  )}
+                  <Button
+                    variant="danger"
+                    leftIcon={<Ban className="h-4 w-4" />}
+                    onClick={() => setAction('blocklist')}
+                  >
+                    Blocklist (remove from company)
+                  </Button>
+                </div>
+              </Card>
+            </Can>
+          )}
+
           <Card padded={false}>
             <CardHeader title="Contact" />
             <div className="space-y-2 p-5">
@@ -334,83 +459,13 @@ export default function PersonnelDetailPage() {
         </div>
       </div>
 
-      <Modal
-        open={separateOpen}
-        onClose={() => setSeparateOpen(false)}
-        title="Record separation"
-        description={`${fullName(p)} · ${p.employee_no}`}
-        size="sm"
-        dismissOnOverlayClick={false}
-        footer={
-          <>
-            <Button variant="secondary" onClick={() => setSeparateOpen(false)}>
-              Cancel
-            </Button>
-            <Button
-              variant="danger"
-              onClick={() => separate.mutate()}
-              isLoading={separate.isPending}
-            >
-              Record separation
-            </Button>
-          </>
-        }
-      >
-        <DraftNotice restoredAt={separateDraft.restoredAt} onDiscard={separateDraft.discard} />
-        <div className="space-y-4">
-          <p className="text-sm text-[var(--app-text-muted)]">
-            This marks the person as no longer employed.
-          </p>
-
-          {openDeployments.length > 0 && (
-            <div className="rounded-lg border border-warning/40 bg-warning-soft px-3 py-2.5 dark:bg-warning/10">
-              <p className="text-sm font-medium text-[var(--app-text)]">
-                {openDeployments.length === 1
-                  ? 'One open deployment will be ended:'
-                  : `${openDeployments.length} open deployments will be ended:`}
-              </p>
-              <ul className="mt-1 list-inside list-disc text-sm text-[var(--app-text-muted)]">
-                {openDeployments.map((d) => (
-                  <li key={d.id}>
-                    {d.branch_name ?? 'Facility'} — {humanize(d.shift)} shift
-                  </li>
-                ))}
-              </ul>
-              <p className="mt-1.5 text-xs text-[var(--app-text-muted)]">
-                The facility's headcount will drop accordingly.
-              </p>
-            </div>
-          )}
-
-          <Field label="Type" required>
-            <Select
-              value={separationStatus}
-              onChange={(e) =>
-                setSeparationStatus(
-                  e.target.value as Extract<EmploymentStatus, 'resigned' | 'terminated'>,
-                )
-              }
-              options={[
-                { value: 'resigned', label: 'Resigned' },
-                { value: 'terminated', label: 'Terminated' },
-              ]}
-            />
-          </Field>
-
-          <Field
-            label="Effective date"
-            required
-            hint="Cannot be earlier than the date hired."
-          >
-            <Input
-              type="date"
-              value={separationDate}
-              min={p.date_hired}
-              onChange={(e) => setSeparationDate(e.target.value)}
-            />
-          </Field>
-        </div>
-      </Modal>
+      <PersonnelActionDialog
+        key={action ?? 'closed'}
+        kind={action}
+        person={p}
+        openDeployments={openDeployments}
+        onClose={() => setAction(null)}
+      />
     </>
   )
 }

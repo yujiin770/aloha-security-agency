@@ -65,7 +65,7 @@ const BASE_ROLES: { value: AppRole; label: string; blurb: string }[] = [
   {
     value: 'deployment_officer',
     label: 'Deployment Officer',
-    blurb: 'Read and write deployments and facilities.',
+    blurb: 'Read and write deployments and area.',
   },
   {
     value: 'branch_coordinator',

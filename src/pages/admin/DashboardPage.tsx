@@ -237,7 +237,7 @@ export default function DashboardPage() {
                   [
                     [UsersRound, 'Active personnel', s?.personnel.active, '/admin/personnel'],
                     [MapPinned, 'Currently deployed', s?.personnel.deployed, '/admin/deployments'],
-                    [Building2, 'Active facilities', s?.branches.active, '/admin/facilities'],
+                    [Building2, 'Active Area', s?.branches.active, '/admin/facilities'],
                     [ShieldAlert, 'Open posts', s?.branches.vacancies, '/admin/facilities'],
                     [Activity, 'Deployments this month', s?.deployments.new_this_month, '/admin/deployments'],
                   ] as [LucideIcon, string, number | undefined, string][]
@@ -287,7 +287,7 @@ export default function DashboardPage() {
               />
             ) : (staffing.data?.filter((b) => b.is_active).length ?? 0) === 0 ? (
               <EmptyState
-                title="No active facilities yet"
+                title="No active area yet"
                 description="Add a facility to start assigning personnel."
               />
             ) : (

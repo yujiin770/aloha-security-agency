@@ -293,7 +293,7 @@ export default function PositionsPage() {
           <p className="max-w-2xl text-sm text-[var(--app-text-muted)]">
             A position marked <strong>public</strong> appears on the application
             form. Marking one <strong>inactive</strong> hides it everywhere
-            without touching the applicants and personnel already assigned to it
+            without touching the applicants who already applied for it
             — which is why deleting a position in use is refused.
           </p>
         </div>
@@ -492,7 +492,7 @@ export default function PositionsPage() {
         message={
           <>
             <strong>{deleting?.name}</strong> will be removed permanently. If any
-            applicant or personnel record still uses it the database will refuse
+            applicant still uses it the database will refuse
             — deactivate it instead to retire it while keeping the history.
           </>
         }

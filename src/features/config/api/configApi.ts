@@ -87,7 +87,8 @@ export async function updatePosition(
 /**
  * Deletes a position.
  *
- * `applicants.position_id` and `personnel.position_id` are `ON DELETE RESTRICT`,
+ * `applicants.position_id` is `ON DELETE RESTRICT` (personnel carry no position
+ * since 0028),
  * so this fails once the position is in use — which is correct. Deactivating is
  * the right move for a position with history; `errors.ts` turns the foreign-key
  * violation into that advice.
