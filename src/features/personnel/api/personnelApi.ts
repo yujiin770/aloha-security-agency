@@ -3,16 +3,23 @@ import { toAppError } from '@/lib/errors'
 import type {
   DeploymentRow,
   EmploymentStatus,
+  Json,
+  PersonnelActionRow,
   PersonnelRosterView,
   PersonnelRow,
+  ShiftType,
 } from '@/types/database.types'
 import type { Paginated } from '@/features/applicants/api/applicantsApi'
 
+/**
+ * An employment status, or a flag that spans statuses: blocklisted (0027) or
+ * re-hired (0030).
+ */
+export type RosterStatusFilter = EmploymentStatus | 'blocklisted' | 'rehired' | ''
+
 export interface PersonnelListParams {
   search?: string
-  status?: EmploymentStatus | ''
-  /** A `positions.id`, not an enum value. */
-  positionId?: string
+  status?: RosterStatusFilter
   branchId?: string
   page: number
   pageSize: number
@@ -26,7 +33,6 @@ export async function listPersonnel(
   const {
     search,
     status,
-    positionId,
     branchId,
     page,
     pageSize,
@@ -41,8 +47,9 @@ export async function listPersonnel(
     .order(sortColumn, { ascending: sortDirection === 'asc' })
     .range(from, from + pageSize - 1)
 
-  if (status) query = query.eq('employment_status', status)
-  if (positionId) query = query.eq('position_id', positionId)
+  if (status === 'blocklisted') query = query.eq('is_blocklisted', true)
+  else if (status === 'rehired') query = query.eq('is_rehired', true)
+  else if (status) query = query.eq('employment_status', status)
   if (branchId) query = query.eq('current_branch_id', branchId)
   if (search?.trim()) {
     const term = search.trim()
@@ -87,8 +94,7 @@ export type NewPersonnelInput = Pick<
   | 'phone'
   | 'birth_date'
   | 'sex'
-  | 'position_id'
-  | 'rank_id'
+  | 'address'
   | 'date_hired'
   | 'emergency_contact_name'
   | 'emergency_contact_phone'
@@ -103,35 +109,37 @@ export type NewPersonnelInput = Pick<
   employee_no?: string | null
 }
 
+/** Where the person is posted. Optional: they can be assigned later from Deployments. */
+export interface FacilityInput {
+  branchId: string
+  shift: ShiftType
+  post?: string | null
+}
+
 /**
  * Adds an already-employed guard straight to the roster, with no applicant
  * behind them. Hiring an applicant still goes through
  * promote_applicant_to_personnel(); this is for the people who were on the
- * payroll before the system was. RLS (personnel_insert) limits it to
- * administrators and HR.
+ * payroll before the system was.
+ *
+ * Goes through the add_existing_personnel RPC (0028) so the person and their
+ * facility (first deployment) are written in one transaction. Administrators
+ * and HR only; the database enforces it.
  */
-export async function createPersonnel(input: NewPersonnelInput): Promise<PersonnelRow> {
-  const { employee_no, ...rest } = input
-  const { data, error } = await supabase
-    .from('personnel')
-    .insert({
-      ...rest,
-      ...(employee_no?.trim() ? { employee_no: employee_no.trim() } : {}),
-      email: rest.email?.trim().toLowerCase() || null,
-      applicant_id: null,
-      profile_id: null,
-      date_separated: null,
-      employment_status: 'active',
-      photo_path: null,
-      created_by: (await supabase.auth.getUser()).data.user?.id ?? null,
-    })
-    .select()
-    .single()
+export async function createPersonnel(
+  input: NewPersonnelInput,
+  facility?: FacilityInput | null,
+): Promise<PersonnelRow> {
+  const { data, error } = await supabase.rpc('add_existing_personnel', {
+    p_data: input as unknown as Json,
+    p_branch_id: facility?.branchId ?? null,
+    ...(facility ? { p_shift: facility.shift, p_post: facility.post ?? null } : {}),
+  })
 
   // A duplicate employee number maps to its own sentence via
   // personnel_employee_no_unique in lib/errors.ts.
   if (error) throw toAppError(error, 'Could not add that personnel record.')
-  return data
+  return data as PersonnelRow
 }
 
 export async function updatePersonnel(
@@ -163,6 +171,7 @@ export async function separatePersonnel(params: {
   id: string
   status: Extract<EmploymentStatus, 'resigned' | 'terminated'>
   dateSeparated: string
+  /** The reason. Required by the database for a termination (0027). */
   note?: string
 }): Promise<PersonnelRow> {
   const { data, error } = await supabase.rpc('separate_personnel', {
@@ -187,4 +196,111 @@ export async function listAvailablePersonnel(): Promise<PersonnelRosterView[]> {
 
   if (error) throw toAppError(error, 'Could not load available personnel.')
   return data ?? []
+}
+
+/* -------------------------------------------------------------------------- */
+/* 0027 — violations, suspension, blocklist, re-hire                           */
+/* -------------------------------------------------------------------------- */
+// Every one of these goes through a SECURITY DEFINER RPC that requires a
+// reason, records the effectivity date, and writes a `personnel_actions` row.
+// Administrators and HR only; the database enforces it.
+
+/** The violation and status-change log for one person, newest first. */
+export async function listPersonnelActions(id: string): Promise<PersonnelActionRow[]> {
+  const { data, error } = await supabase
+    .from('personnel_actions')
+    .select('*')
+    .eq('personnel_id', id)
+    .order('effective_date', { ascending: false })
+    .order('created_at', { ascending: false })
+
+  if (error) throw toAppError(error, 'Could not load the disciplinary record.')
+  return data ?? []
+}
+
+export async function recordViolation(params: {
+  id: string
+  offense: string
+  reason: string
+  date: string
+}): Promise<PersonnelActionRow> {
+  const { data, error } = await supabase.rpc('record_personnel_violation', {
+    p_personnel_id: params.id,
+    p_offense: params.offense,
+    p_reason: params.reason,
+    p_date: params.date,
+  })
+  if (error) throw toAppError(error, 'Could not record that violation.')
+  return data as PersonnelActionRow
+}
+
+export async function suspendPersonnel(params: {
+  id: string
+  reason: string
+  date: string
+  until?: string | null
+}): Promise<PersonnelRow> {
+  const { data, error } = await supabase.rpc('suspend_personnel', {
+    p_personnel_id: params.id,
+    p_reason: params.reason,
+    p_date: params.date,
+    p_until: params.until || null,
+  })
+  if (error) throw toAppError(error, 'Could not record that suspension.')
+  return data as PersonnelRow
+}
+
+export async function liftSuspension(params: {
+  id: string
+  reason: string
+  date: string
+}): Promise<PersonnelRow> {
+  const { data, error } = await supabase.rpc('lift_personnel_suspension', {
+    p_personnel_id: params.id,
+    p_reason: params.reason,
+    p_date: params.date,
+  })
+  if (error) throw toAppError(error, 'Could not lift that suspension.')
+  return data as PersonnelRow
+}
+
+/** Removes the person from the company for good: no re-hire, no re-application. */
+export async function blocklistPersonnel(params: {
+  id: string
+  reason: string
+  date: string
+}): Promise<PersonnelRow> {
+  const { data, error } = await supabase.rpc('blocklist_personnel', {
+    p_personnel_id: params.id,
+    p_reason: params.reason,
+    p_date: params.date,
+  })
+  if (error) throw toAppError(error, 'Could not blocklist that person.')
+  return data as PersonnelRow
+}
+
+/** Brings a resigned (and not blocklisted) person back as active. */
+export async function rehirePersonnel(params: {
+  id: string
+  reason: string
+  date: string
+}): Promise<PersonnelRow> {
+  const { data, error } = await supabase.rpc('rehire_personnel', {
+    p_personnel_id: params.id,
+    p_reason: params.reason,
+    p_date: params.date,
+  })
+  if (error) throw toAppError(error, 'Could not re-hire that person.')
+  return data as PersonnelRow
+}
+
+/**
+ * Imports one row of the personnel CSV/XLSX (0029): the person, their
+ * facility, status and an optional violation, all or nothing. A failure leaves
+ * nothing behind, so the row can be corrected and sent again.
+ */
+export async function importPersonnelRow(row: Record<string, string>): Promise<PersonnelRow> {
+  const { data, error } = await supabase.rpc('import_personnel_row', { p_row: row as Json })
+  if (error) throw toAppError(error, 'Could not import this row.')
+  return data as PersonnelRow
 }

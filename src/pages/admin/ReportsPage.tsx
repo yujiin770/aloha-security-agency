@@ -410,7 +410,7 @@ export default function ReportsPage() {
                 ))}
               </div>
             ) : (staffing.data?.length ?? 0) === 0 ? (
-              <EmptyState title="No facilities yet" />
+              <EmptyState title="No area yet" />
             ) : (
               <div className="scrollbar-slim overflow-x-auto">
                 <table className="w-full text-sm">

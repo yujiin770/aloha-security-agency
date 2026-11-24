@@ -33,6 +33,7 @@ const ApplicantsPage = lazy(() => import('@/pages/admin/ApplicantsPage'))
 const ApplicantDetailPage = lazy(() => import('@/pages/admin/ApplicantDetailPage'))
 const PersonnelPage = lazy(() => import('@/pages/admin/PersonnelPage'))
 const PersonnelDetailPage = lazy(() => import('@/pages/admin/PersonnelDetailPage'))
+const PersonnelImportPage = lazy(() => import('@/pages/admin/PersonnelImportPage'))
 const BranchesPage = lazy(() => import('@/pages/admin/BranchesPage'))
 const DeploymentsPage = lazy(() => import('@/pages/admin/DeploymentsPage'))
 const UsersPage = lazy(() => import('@/pages/admin/UsersPage'))
@@ -129,6 +130,17 @@ export const router = createBrowserRouter([
             element: (
               <PageGuard permission="pages.personnel">
                 <PersonnelPage />
+              </PageGuard>
+            ),
+          },
+          {
+            // Bulk import writes personnel: administrators and HR, as the RPC enforces.
+            path: 'personnel/import',
+            element: (
+              <PageGuard permission="pages.personnel">
+                <RoleGuard allow={['owner', 'admin', 'system_administrator', 'hr_staff']}>
+                  <PersonnelImportPage />
+                </RoleGuard>
               </PageGuard>
             ),
           },

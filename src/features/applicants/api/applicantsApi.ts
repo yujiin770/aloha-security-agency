@@ -13,6 +13,7 @@ import type {
   EmailEligibility,
   Json,
   PersonnelRow,
+  ShiftType,
 } from '@/types/database.types'
 import type {
   ApplicationFormValues,
@@ -538,12 +539,14 @@ export async function updateApplicant(
 export async function hireApplicant(params: {
   applicantId: string
   dateHired?: string
-  rankId?: string
+  /** 0028: deploy the new hire to this facility in the same transaction. */
+  branchId?: string
+  shift?: ShiftType
 }): Promise<PersonnelRow> {
   const { data, error } = await supabase.rpc('promote_applicant_to_personnel', {
     p_applicant_id: params.applicantId,
     ...(params.dateHired ? { p_date_hired: params.dateHired } : {}),
-    ...(params.rankId ? { p_rank_id: params.rankId } : {}),
+    ...(params.branchId ? { p_branch_id: params.branchId, p_shift: params.shift ?? 'day' } : {}),
   })
 
   if (error) throw toAppError(error, 'Could not onboard this applicant.')

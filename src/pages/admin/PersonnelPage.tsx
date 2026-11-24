@@ -8,6 +8,7 @@ import {
   Search,
   ShieldAlert,
   UserCheck,
+  Upload,
   UserPlus,
   UsersRound,
 } from 'lucide-react'
@@ -21,7 +22,10 @@ import { StatCard } from '@/components/ui/Feedback'
 import { fetchDashboardStats } from '@/features/reports/api/reportsApi'
 import { queryKeys } from '@/lib/queryKeys'
 import { errorMessage } from '@/lib/errors'
-import { listPersonnel } from '@/features/personnel/api/personnelApi'
+import {
+  listPersonnel,
+  type RosterStatusFilter,
+} from '@/features/personnel/api/personnelApi'
 import { AddPersonnelDialog } from '@/features/personnel/components/AddPersonnelDialog'
 import { Can } from '@/app/guards'
 import { listBranchOptions } from '@/features/branches/api/branchesApi'
@@ -32,10 +36,9 @@ import {
   EMPLOYMENT_STATUSES,
   employmentStatusMeta,
 } from '@/utils/constants'
-import { usePositions } from '@/features/config/hooks/useConfig'
 import { formatDate } from '@/utils/format'
 import { useDebouncedValue } from '@/hooks/useDebouncedValue'
-import type { EmploymentStatus, PersonnelRosterView } from '@/types/database.types'
+import type { PersonnelRosterView } from '@/types/database.types'
 
 export default function PersonnelPage() {
   const navigate = useNavigate()
@@ -43,9 +46,8 @@ export default function PersonnelPage() {
 
   const [search, setSearch] = useState('')
   const debouncedSearch = useDebouncedValue(search, 300)
-  const [status, setStatus] = useState<EmploymentStatus | ''>('active')
+  const [status, setStatus] = useState<RosterStatusFilter>('active')
   const [addOpen, setAddOpen] = useState(false)
-  const [positionId, setPositionId] = useState('')
   const [branchId, setBranchId] = useState('')
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE)
@@ -60,12 +62,10 @@ export default function PersonnelPage() {
     staleTime: 5 * 60_000,
   })
 
-  const { data: positions = [] } = usePositions(true)
 
   const params = {
     search: debouncedSearch,
     status,
-    positionId,
     branchId,
     page,
     pageSize,
@@ -96,36 +96,50 @@ export default function PersonnelPage() {
       ),
     },
     {
-      key: 'position',
-      header: 'Position',
-      sortKey: 'position_name',
-      render: (row) => (
-        <div>
-          <Badge tone={row.position_tone}>{row.position_name}</Badge>
-          {row.rank_name && (
-            <p className="mt-1 text-xs text-[var(--app-text-subtle)]">
-              {row.rank_name}
-            </p>
-          )}
-        </div>
-      ),
-    },
-    {
       key: 'status',
       header: 'Status',
       sortKey: 'employment_status',
       render: (row) => {
         const meta = employmentStatusMeta(row.employment_status)
         return (
-          <Badge tone={meta?.tone ?? 'neutral'} dot>
-            {meta?.label}
-          </Badge>
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-1.5">
+              <Badge tone={meta?.tone ?? 'neutral'} dot>
+                {meta?.label}
+              </Badge>
+              {row.is_blocklisted && (
+                <Badge tone="danger" size="sm">
+                  Blocklisted
+                </Badge>
+              )}
+              {row.is_rehired && (
+                <span
+                  title={`Re-hired${row.rehire_count > 1 ? ` ${row.rehire_count} times` : ''}, last on ${formatDate(row.last_rehired_on)}`}
+                >
+                  <Badge tone="info" size="sm">
+                    Re-hired{row.rehire_count > 1 ? ` ×${row.rehire_count}` : ''}
+                  </Badge>
+                </span>
+              )}
+            </div>
+            {row.status_effective_date && (
+              <p className="mt-1 text-xs whitespace-nowrap text-[var(--app-text-subtle)]">
+                Effective {formatDate(row.status_effective_date)}
+              </p>
+            )}
+            {row.violation_count > 0 && (
+              <p className="mt-0.5 text-xs font-medium text-warning">
+                {row.violation_count} violation{row.violation_count === 1 ? '' : 's'}
+              </p>
+            )}
+          </div>
         )
       },
     },
     {
       key: 'deployment',
-      header: 'Current post',
+      header: 'Facility',
+      sortKey: 'current_branch_name',
       render: (row) =>
         row.current_branch_name ? (
           <div className="min-w-0">
@@ -133,7 +147,9 @@ export default function PersonnelPage() {
               {row.current_branch_name}
             </p>
             <p className="text-xs text-[var(--app-text-subtle)] capitalize">
-              {row.current_shift} shift · since {formatDate(row.current_start_date)}
+              {row.current_shift} shift ·{' '}
+              {row.current_deployment_status === 'pending' ? 'starts' : 'since'}{' '}
+              {formatDate(row.current_start_date)}
             </p>
           </div>
         ) : (
@@ -194,10 +210,13 @@ export default function PersonnelPage() {
       [
         { key: 'employee_no', header: 'Employee no.' },
         { key: 'full_name', header: 'Name' },
-        { key: 'position_name', header: 'Position' },
-        { key: 'rank_name', header: 'Rank' },
         { key: 'employment_status', header: 'Status' },
-        { key: 'current_branch_name', header: 'Current post' },
+        { key: 'status_effective_date', header: 'Effectivity date' },
+        { key: 'is_blocklisted', header: 'Blocklisted' },
+        { key: 'is_rehired', header: 'Re-hired' },
+        { key: 'last_rehired_on', header: 'Last re-hired' },
+        { key: 'violation_count', header: 'Violations' },
+        { key: 'current_branch_name', header: 'Facility' },
         { key: 'current_shift', header: 'Shift' },
         { key: 'security_license_no', header: 'Licence no.' },
         { key: 'security_license_expiry', header: 'Licence expiry' },
@@ -219,7 +238,7 @@ export default function PersonnelPage() {
     <>
       <PageHeader
         title="Personnel roster"
-        description="Everyone currently employed, and where they're posted."
+        description="Everyone on the roster and where they're posted. Filter by Resigned to find former personnel and re-hire them."
         actions={
           <>
             <Button
@@ -230,6 +249,15 @@ export default function PersonnelPage() {
               Export CSV
             </Button>
             {/* Mirrors personnel_insert: administrators and HR. */}
+            <Can roles={[...ADMIN_ROLES, 'hr_staff']}>
+              <Button
+                variant="secondary"
+                leftIcon={<Upload className="h-4 w-4" />}
+                onClick={() => navigate('/admin/personnel/import')}
+              >
+                Import
+              </Button>
+            </Can>
             <Can roles={[...ADMIN_ROLES, 'hr_staff']}>
               <Button leftIcon={<UserPlus className="h-4 w-4" />} onClick={() => setAddOpen(true)}>
                 Add existing personnel
@@ -282,7 +310,7 @@ export default function PersonnelPage() {
         </section>
       )}
 
-      <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <div className="relative sm:col-span-2 lg:col-span-1">
           <Search
             className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-[var(--app-text-subtle)]"
@@ -307,33 +335,24 @@ export default function PersonnelPage() {
             placeholder="All statuses"
             value={status}
             onChange={(e) => {
-              setStatus(e.target.value as EmploymentStatus | '')
+              setStatus(e.target.value as RosterStatusFilter)
               setPage(1)
             }}
-            options={EMPLOYMENT_STATUSES.map((s) => ({
-              value: s.value,
-              label: s.label,
-            }))}
-          />
-        </Field>
-
-        <Field label="">
-          <Select
-            aria-label="Position"
-            placeholder="All positions"
-            value={positionId}
-            onChange={(e) => {
-              setPositionId(e.target.value)
-              setPage(1)
-            }}
-            options={positions.map((p) => ({ value: p.id, label: p.name }))}
+            options={[
+              ...EMPLOYMENT_STATUSES.map((s) => ({
+                value: s.value,
+                label: s.label,
+              })),
+              { value: 'blocklisted', label: 'Blocklisted' },
+              { value: 'rehired', label: 'Re-hired' },
+            ]}
           />
         </Field>
 
         <Field label="">
           <Select
             aria-label="Facility"
-            placeholder="All facilities"
+            placeholder="All area"
             value={branchId}
             onChange={(e) => {
               setBranchId(e.target.value)
@@ -352,7 +371,7 @@ export default function PersonnelPage() {
         isLoading={query.isLoading}
         error={query.isError ? errorMessage(query.error) : null}
         onRetry={() => void query.refetch()}
-        emptyTitle="No personnel found"
+        emptyTitle={status === 'resigned' ? 'No resigned personnel found' : 'No personnel found'}
         emptyDescription="Personnel appear here once an applicant is hired from the recruitment pipeline."
         sort={sort}
         onSortChange={setSort}

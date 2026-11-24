@@ -101,6 +101,18 @@ export type EmploymentStatus =
   | 'resigned'
   | 'terminated'
 
+/** 0027 — one row per violation or status event in `personnel_actions`. */
+export type PersonnelActionType =
+  | 'violation'
+  | 'suspension'
+  | 'suspension_lifted'
+  | 'resignation'
+  | 'termination'
+  | 'blocklist'
+  | 'rehire'
+  /** 0031: a remark that changes nothing, e.g. from a roster import. */
+  | 'note'
+
 export type DeploymentStatus =
   | 'pending'
   | 'active'
@@ -317,8 +329,8 @@ export type PersonnelRow = {
   phone: string | null
   birth_date: string | null
   sex: SexType | null
-  position_id: string
-  rank_id: string | null
+  /** 0029 */
+  address: string | null
   date_hired: string
   date_separated: string | null
   employment_status: EmploymentStatus
@@ -331,9 +343,31 @@ export type PersonnelRow = {
   tin_no: string | null
   security_license_no: string | null
   security_license_expiry: string | null
+  /** 0027: when the current employment_status took effect. */
+  status_effective_date: string | null
+  /** 0027: removed from the company — cannot be re-hired or re-apply. */
+  is_blocklisted: boolean
+  blocklisted_on: string | null
+  blocklist_reason: string | null
   created_by: string | null
   created_at: string
   updated_at: string
+}
+
+/** 0027 — append-only; written only through the personnel RPCs. */
+export type PersonnelActionRow = {
+  id: string
+  personnel_id: string
+  action_type: PersonnelActionType
+  offense: string | null
+  reason: string
+  effective_date: string
+  end_date: string | null
+  from_status: EmploymentStatus | null
+  to_status: EmploymentStatus | null
+  details: string | null
+  recorded_by: string | null
+  created_at: string
 }
 
 export type DeploymentRow = {
@@ -545,11 +579,6 @@ export type ActiveDeploymentView = {
   personnel_id: string
   employee_no: string
   personnel_name: string
-  position_id: string
-  position_code: string
-  position_name: string
-  position_tone: ToneToken
-  rank_name: string | null
   employment_status: EmploymentStatus
   photo_path: string | null
   branch_id: string
@@ -589,13 +618,6 @@ export type PersonnelRosterView = {
   full_name: string
   first_name: string
   last_name: string
-  position_id: string
-  position_code: string
-  position_name: string
-  position_tone: ToneToken
-  rank_id: string | null
-  rank_name: string | null
-  rank_level: number | null
   employment_status: EmploymentStatus
   date_hired: string
   phone: string | null
@@ -609,6 +631,17 @@ export type PersonnelRosterView = {
   current_branch_name: string | null
   current_shift: ShiftType | null
   current_start_date: string | null
+  /** 0028: 'pending' when the person's first day at the facility has not come yet. */
+  current_deployment_status: DeploymentStatus | null
+  // 0027
+  status_effective_date: string | null
+  date_separated: string | null
+  is_blocklisted: boolean
+  violation_count: number
+  /** 0030: re-hired at least once (status is Active again; see personnel_actions). */
+  is_rehired: boolean
+  rehire_count: number
+  last_rehired_on: string | null
 }
 
 export type RecruitmentFunnelRow = {
@@ -736,6 +769,7 @@ export type Database = {
           employee_no?: string
         }
       >
+      personnel_actions: TableDef<PersonnelActionRow, never, never>
       deployments: TableDef<
         DeploymentRow,
         Omit<DeploymentRow, 'id' | 'created_at' | 'updated_at'> & { id?: string }
@@ -804,7 +838,25 @@ export type Database = {
       }
       get_dashboard_stats: { Args: Record<string, never>; Returns: DashboardStats }
       promote_applicant_to_personnel: {
-        Args: { p_applicant_id: string; p_date_hired?: string; p_rank_id?: string }
+        Args: {
+          p_applicant_id: string
+          p_date_hired?: string
+          /** 0028: the facility to deploy the new hire to. */
+          p_branch_id?: string | null
+          p_shift?: ShiftType
+        }
+        Returns: PersonnelRow
+      }
+      /** 0029: one CSV/XLSX import row — person, facility, status, violation. */
+      import_personnel_row: { Args: { p_row: Json }; Returns: PersonnelRow }
+      /** 0028: "Add existing personnel", with an optional first facility. */
+      add_existing_personnel: {
+        Args: {
+          p_data: Json
+          p_branch_id?: string | null
+          p_shift?: ShiftType
+          p_post?: string | null
+        }
         Returns: PersonnelRow
       }
       separate_personnel: {
@@ -814,6 +866,31 @@ export type Database = {
           p_date?: string
           p_note?: string | null
         }
+        Returns: PersonnelRow
+      }
+      record_personnel_violation: {
+        Args: { p_personnel_id: string; p_offense: string; p_reason: string; p_date?: string }
+        Returns: PersonnelActionRow
+      }
+      suspend_personnel: {
+        Args: {
+          p_personnel_id: string
+          p_reason: string
+          p_date?: string
+          p_until?: string | null
+        }
+        Returns: PersonnelRow
+      }
+      lift_personnel_suspension: {
+        Args: { p_personnel_id: string; p_reason: string; p_date?: string }
+        Returns: PersonnelRow
+      }
+      blocklist_personnel: {
+        Args: { p_personnel_id: string; p_reason: string; p_date?: string }
+        Returns: PersonnelRow
+      }
+      rehire_personnel: {
+        Args: { p_personnel_id: string; p_reason: string; p_date?: string }
         Returns: PersonnelRow
       }
       ranks_for_position: { Args: { p_position_id: string }; Returns: RankRow[] }
@@ -843,6 +920,7 @@ export type Database = {
       app_role: AppRole
       applicant_status: ApplicantStatus
       employment_status: EmploymentStatus
+      personnel_action_type: PersonnelActionType
       deployment_status: DeploymentStatus
       shift_type: ShiftType
       document_type: DocumentType

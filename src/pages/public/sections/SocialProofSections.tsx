@@ -43,7 +43,7 @@ export function TrustBarSection() {
             Our Esteemed Partners
           </h2>
           <p className="mt-6 text-[var(--app-text-muted)] max-w-2xl mx-auto text-lg leading-relaxed">
-            We are proud to secure some of the most prominent facilities and 
+            We are proud to secure some of the most prominent area and 
             institutions across the Philippines.
           </p>
         </Reveal>

@@ -283,7 +283,7 @@ export default function RanksPage() {
         error={ranks.isError ? errorMessage(ranks.error) : null}
         onRetry={() => void ranks.refetch()}
         emptyTitle="No ranks configured"
-        emptyDescription="Add ranks so personnel can be given a title on hire."
+        emptyDescription="Add ranks to describe the grades used for each position."
         emptyAction={
           <Can roles={[...ADMIN_ROLES]}>
             <Button size="sm" onClick={openCreate}>
@@ -442,9 +442,8 @@ export default function RanksPage() {
         isLoading={remove.isPending}
         message={
           <>
-            <strong>{deleting?.name}</strong> will be removed permanently. Any
-            personnel holding it will simply have no rank — their records are not
-            deleted. Deactivate instead to retire it while keeping the history.
+            <strong>{deleting?.name}</strong> will be removed permanently.
+            Deactivate instead to retire it while keeping the history.
           </>
         }
       />

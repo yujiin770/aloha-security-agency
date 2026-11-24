@@ -1,7 +1,6 @@
-import { useEffect } from 'react'
 import { useForm, useWatch } from 'react-hook-form'
 import { z } from 'zod'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { zodResolver } from '@/lib/zodResolver'
 import { Button } from '@/components/ui/Button'
@@ -10,7 +9,9 @@ import { Modal } from '@/components/ui/Modal'
 import { useToast } from '@/components/ui/Toast'
 import { errorMessage } from '@/lib/errors'
 import { queryKeys } from '@/lib/queryKeys'
-import { usePositions, useRanksForPosition } from '@/features/config/hooks/useConfig'
+import { listBranchOptions } from '@/features/branches/api/branchesApi'
+import { SHIFTS } from '@/utils/constants'
+import type { ShiftType } from '@/types/database.types'
 import { useDialogDraft } from '@/hooks/useDialogDraft'
 import { DraftNotice } from '@/components/ui/DraftNotice'
 import { createPersonnel } from '../api/personnelApi'
@@ -35,8 +36,10 @@ const schema = z
       .or(z.literal('')),
     birth_date: optionalDate,
     sex: z.enum(['male', 'female']).optional().or(z.literal('')),
-    position_id: z.string().min(1, 'Choose a position'),
-    rank_id: z.string().optional().or(z.literal('')),
+    address: optional(300),
+    branch_id: z.string().optional().or(z.literal('')),
+    shift: z.enum(['day', 'night', 'mid', 'rotating']),
+    post_assignment: optional(120),
     date_hired: z.string().min(1, 'Date hired is required'),
     security_license_no: optional(60),
     security_license_expiry: optionalDate,
@@ -64,8 +67,10 @@ const DEFAULTS: FormValues = {
   phone: '',
   birth_date: '',
   sex: '',
-  position_id: '',
-  rank_id: '',
+  address: '',
+  branch_id: '',
+  shift: 'day',
+  post_assignment: '',
   date_hired: '',
   security_license_no: '',
   security_license_expiry: '',
@@ -96,11 +101,14 @@ export function AddPersonnelDialog({
   const toast = useToast()
   const qc = useQueryClient()
   const navigate = useNavigate()
-  const positions = usePositions()
+  const facilities = useQuery({
+    queryKey: queryKeys.branches.options(),
+    queryFn: listBranchOptions,
+    staleTime: 5 * 60_000,
+  })
 
   const form = useForm<FormValues>({ resolver: zodResolver(schema), defaultValues: DEFAULTS })
-  const positionId = useWatch({ control: form.control, name: 'position_id' })
-  const ranks = useRanksForPosition(positionId || null)
+  const branchId = useWatch({ control: form.control, name: 'branch_id' })
   const errors = form.formState.errors
 
   function close() {
@@ -109,29 +117,20 @@ export function AddPersonnelDialog({
   }
 
   // Unsaved work survives a refresh: the parent reopens the dialog with it.
-  // Waits for positions so the restored position select has its option.
+  // Waits for the facilities so the restored facility select has its option.
   const draft = useDialogDraft({
     id: 'personnel.add',
     form,
     open,
     recordId: null,
-    ready: positions.isSuccess,
+    ready: facilities.isSuccess,
     onResume: () => onResume?.(),
   })
 
-  // The rank select is uncontrolled and its options load only after a position
-  // is set. When a restored draft sets both at once, the DOM picked "No rank"
-  // before the rank's option existed while the form still holds the rank —
-  // re-applying the value once the options arrive makes the two agree.
-  useEffect(() => {
-    if (!ranks.data) return
-    const rankId = form.getValues('rank_id')
-    if (rankId) form.setValue('rank_id', rankId)
-  }, [ranks.data, form])
-
   const create = useMutation({
     mutationFn: (values: FormValues) =>
-      createPersonnel({
+      createPersonnel(
+        {
         employee_no: blankToNull(values.employee_no),
         first_name: values.first_name.trim(),
         middle_name: blankToNull(values.middle_name),
@@ -141,8 +140,7 @@ export function AddPersonnelDialog({
         phone: blankToNull(values.phone),
         birth_date: blankToNull(values.birth_date),
         sex: values.sex || null,
-        position_id: values.position_id,
-        rank_id: blankToNull(values.rank_id),
+        address: blankToNull(values.address),
         date_hired: values.date_hired,
         security_license_no: blankToNull(values.security_license_no),
         security_license_expiry: blankToNull(values.security_license_expiry),
@@ -152,7 +150,15 @@ export function AddPersonnelDialog({
         tin_no: blankToNull(values.tin_no),
         emergency_contact_name: blankToNull(values.emergency_contact_name),
         emergency_contact_phone: blankToNull(values.emergency_contact_phone),
-      }),
+        },
+        values.branch_id
+          ? {
+              branchId: values.branch_id,
+              shift: values.shift as ShiftType,
+              post: blankToNull(values.post_assignment),
+            }
+          : null,
+      ),
     onSuccess: (person) => {
       toast.success(
         'Personnel added',
@@ -160,6 +166,9 @@ export function AddPersonnelDialog({
       )
       void qc.invalidateQueries({ queryKey: queryKeys.personnel.all })
       void qc.invalidateQueries({ queryKey: queryKeys.reports.all })
+      // A facility creates a deployment, which feeds facility headcounts.
+      void qc.invalidateQueries({ queryKey: queryKeys.deployments.all })
+      void qc.invalidateQueries({ queryKey: queryKeys.branches.all })
       close()
       navigate(`/admin/personnel/${person.id}`)
     },
@@ -226,6 +235,9 @@ export function AddPersonnelDialog({
             <Field label="Mobile" error={errors.phone?.message}>
               <Input inputMode="tel" placeholder="09171234567" {...form.register('phone')} />
             </Field>
+            <Field label="Address" className="sm:col-span-2" error={errors.address?.message}>
+              <Input autoComplete="off" placeholder="Barangay, city" {...form.register('address')} />
+            </Field>
           </div>
         </fieldset>
 
@@ -234,26 +246,30 @@ export function AddPersonnelDialog({
             Employment
           </legend>
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Position" required error={errors.position_id?.message}>
+            <Field
+              label="Facility"
+              hint="Area of assignment. Leave blank to assign later from Deployments."
+              error={errors.branch_id?.message}
+            >
               <Select
-                placeholder={positions.isLoading ? 'Loading…' : 'Choose a position'}
-                options={(positions.data ?? []).map((p) => ({ value: p.id, label: p.name }))}
-                {...form.register('position_id', {
-                  onChange: () => form.setValue('rank_id', ''),
-                })}
+                placeholder={facilities.isLoading ? 'Loading…' : 'Not yet assigned'}
+                options={(facilities.data ?? []).map((b) => ({ value: b.id, label: b.name }))}
+                {...form.register('branch_id')}
+              />
+            </Field>
+            <Field label="Shift" error={errors.shift?.message}>
+              <Select
+                disabled={!branchId}
+                options={SHIFTS.map((s) => ({ value: s.value, label: s.label }))}
+                {...form.register('shift')}
               />
             </Field>
             <Field
-              label="Rank"
-              hint={positionId ? undefined : 'Choose a position first'}
-              error={errors.rank_id?.message}
+              label="Post"
+              hint="Optional, e.g. Main gate"
+              error={errors.post_assignment?.message}
             >
-              <Select
-                placeholder="No rank"
-                disabled={!positionId}
-                options={(ranks.data ?? []).map((r) => ({ value: r.id, label: r.name }))}
-                {...form.register('rank_id')}
-              />
+              <Input autoComplete="off" disabled={!branchId} {...form.register('post_assignment')} />
             </Field>
             <Field label="Date hired" required error={errors.date_hired?.message}>
               <Input type="date" {...form.register('date_hired')} />

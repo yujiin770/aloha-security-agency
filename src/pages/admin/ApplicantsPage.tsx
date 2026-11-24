@@ -282,9 +282,9 @@ export default function ApplicantsPage() {
               options={positions.map((p) => ({ value: p.id, label: p.name }))}
             />
           </Field>
-          <Field label="Preferred facility"> 
+          <Field label="Preferred area"> 
             <Select
-              placeholder="All facilities"
+              placeholder="All Area"
               value={branchId}
               onChange={(e) => setFilter('branch', e.target.value)}
               options={branches.map((b) => ({ value: b.id, label: b.name }))}

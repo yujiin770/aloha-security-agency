@@ -293,7 +293,7 @@ export default function BranchesPage() {
   return (
     <>
       <PageHeader
-        title="Facilities"
+        title="Post / Area"
         description="Client posts and detachments where personnel are deployed."
         actions={
           <Can roles={[...ADMIN_ROLES]}>
@@ -308,7 +308,7 @@ export default function BranchesPage() {
         <section aria-label="Facility summary" className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <StatCard
             icon={Building2}
-            label="Active facilities"
+            label="Active Area"
             value={summary.facilities}
             caption={`${branches.data?.length ?? 0} on record`}
             isLoading={staffing.isLoading}
@@ -334,7 +334,7 @@ export default function BranchesPage() {
             tone={summary.fill === null ? 'neutral' : summary.fill >= 100 ? 'success' : summary.fill >= 70 ? 'warning' : 'danger'}
             label="Overall fill rate"
             value={formatPercent(summary.fill)}
-            caption="Across all active facilities"
+            caption="Across all active area"
             isLoading={staffing.isLoading}
           />
         </section>
@@ -393,7 +393,7 @@ export default function BranchesPage() {
       {isFiltered && !branches.isLoading && (
         <div className="mb-4 flex items-center gap-3">
           <p className="text-sm text-[var(--app-text-muted)]">
-            {visible.length} of {branches.data?.length ?? 0} facilities
+            {visible.length} of {branches.data?.length ?? 0} area
           </p>
           <Button
             variant="ghost"
@@ -423,7 +423,7 @@ export default function BranchesPage() {
         <Card>
           {isFiltered ? (
             <EmptyState
-              title="No facilities match those filters"
+              title="No area match those filters"
               description="Try a different search term, or clear the filters to see everything."
               icon={<Search className="h-6 w-6" aria-hidden="true" />}
               action={
@@ -434,13 +434,13 @@ export default function BranchesPage() {
             />
           ) : (
             <EmptyState
-              title="No Facilities yet"
+              title="No Area yet"
               description="Add your first client post so personnel can be deployed to it."
               icon={<Building2 className="h-6 w-6" aria-hidden="true" />}
               action={
                 <Can roles={[...ADMIN_ROLES]}>
                   <Button size="sm" onClick={openCreate}>
-                    New facilities
+                    New Area
                   </Button>
                 </Can>
               }

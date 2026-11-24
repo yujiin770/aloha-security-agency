@@ -35,6 +35,8 @@ export const queryKeys = {
     detail: (id: string) => [...queryKeys.personnel.all, 'detail', id] as const,
     deployments: (id: string) =>
       [...queryKeys.personnel.all, 'detail', id, 'deployments'] as const,
+    actions: (id: string) =>
+      [...queryKeys.personnel.all, 'detail', id, 'actions'] as const,
   },
 
   branches: {
