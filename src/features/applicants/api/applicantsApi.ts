@@ -19,6 +19,7 @@ import type {
   ApplicationFormValues,
 } from '../schemas/applicationSchema'
 import { toApplicantInsert } from '../schemas/applicationSchema'
+import { pdsToPatch } from '@/features/pds/pdsSchema'
 import { buildStatusEmail } from '../utils/emailTemplates'
 
 /* -------------------------------------------------------------------------- */
@@ -85,7 +86,7 @@ export async function submitApplication(
   try {
     const { data, error } = await supabase
       .rpc('submit_application', {
-        p_payload: toApplicantInsert(values) as unknown as Json,
+        p_payload: { ...toApplicantInsert(values), ...pdsToPatch(values) } as unknown as Json,
         p_submission_id: submissionId ?? null,
       })
       .abortSignal(controller.signal)
@@ -278,13 +279,20 @@ export interface ApplicantListParams {
   /** A `positions.id`, not an enum value. */
   positionId?: string
   branchId?: string
-  /** Archived applicants are left out unless asked for or filtered to directly. */
-  includeArchived?: boolean
+  /**
+   * Closed applications — hired (they are on the personnel roster now),
+   * rejected and archived — are left out unless asked for or filtered to
+   * directly.
+   */
+  includeClosed?: boolean
   page: number
   pageSize: number
   sortColumn?: string
   sortDirection?: 'asc' | 'desc'
 }
+
+/** Still in the recruitment pipeline. Hired, rejected and archived are closed. */
+export const OPEN_APPLICANT_STATUSES: ApplicantStatus[] = ['pending', 'screening', 'interview']
 
 export interface Paginated<T> {
   rows: T[]
@@ -299,7 +307,7 @@ export async function listApplicants(
     status,
     positionId,
     branchId,
-    includeArchived = false,
+    includeClosed = false,
     page,
     pageSize,
     sortColumn = 'created_at',
@@ -316,7 +324,7 @@ export async function listApplicants(
     .range(from, to)
 
   if (status) query = query.eq('status', status)
-  else if (!includeArchived) query = query.neq('status', 'archived')
+  else if (!includeClosed) query = query.in('status', OPEN_APPLICANT_STATUSES)
   if (positionId) query = query.eq('position_id', positionId)
   if (branchId) query = query.eq('preferred_branch_id', branchId)
 

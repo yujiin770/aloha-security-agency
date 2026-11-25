@@ -12,10 +12,14 @@ import type {
 import type { Paginated } from '@/features/applicants/api/applicantsApi'
 
 /**
- * An employment status, or a flag that spans statuses: blocklisted (0027) or
- * re-hired (0030).
+ * An employment status, a flag that spans statuses — blocklisted (0027),
+ * re-hired (0030) — or `employed`: everyone still with the agency (active, on
+ * leave or suspended), which is what the roster opens on.
  */
-export type RosterStatusFilter = EmploymentStatus | 'blocklisted' | 'rehired' | ''
+export type RosterStatusFilter = EmploymentStatus | 'employed' | 'blocklisted' | 'rehired' | ''
+
+/** Still with the agency: hired and not separated. */
+export const EMPLOYED_STATUSES: EmploymentStatus[] = ['active', 'on_leave', 'suspended']
 
 export interface PersonnelListParams {
   search?: string
@@ -47,13 +51,18 @@ export async function listPersonnel(
     .order(sortColumn, { ascending: sortDirection === 'asc' })
     .range(from, from + pageSize - 1)
 
-  if (status === 'blocklisted') query = query.eq('is_blocklisted', true)
+  if (status === 'employed') query = query.in('employment_status', EMPLOYED_STATUSES)
+  else if (status === 'blocklisted') query = query.eq('is_blocklisted', true)
   else if (status === 'rehired') query = query.eq('is_rehired', true)
   else if (status) query = query.eq('employment_status', status)
   if (branchId) query = query.eq('current_branch_id', branchId)
-  if (search?.trim()) {
-    const term = search.trim()
-    query = query.or(`full_name.ilike.%${term}%,employee_no.ilike.%${term}%`)
+  // Commas and parentheses are PostgREST `or()` syntax; a term containing one
+  // would split the filter and fail the request, so they are dropped.
+  const term = search?.replace(/[,()]/g, ' ').trim()
+  if (term) {
+    query = query.or(
+      `full_name.ilike.%${term}%,employee_no.ilike.%${term}%,security_license_no.ilike.%${term}%`,
+    )
   }
 
   const { data, error, count } = await query
@@ -69,6 +78,20 @@ export async function getPersonnel(id: string): Promise<PersonnelRow> {
     .single()
 
   if (error) throw toAppError(error, 'Could not load that personnel record.')
+  return data
+}
+
+/** The roster record a hired applicant became, if any (and if visible to the caller). */
+export async function getPersonnelForApplicant(
+  applicantId: string,
+): Promise<Pick<PersonnelRow, 'id' | 'employee_no' | 'employment_status'> | null> {
+  const { data, error } = await supabase
+    .from('personnel')
+    .select('id, employee_no, employment_status')
+    .eq('applicant_id', applicantId)
+    .maybeSingle()
+
+  if (error) throw toAppError(error, 'Could not load the personnel record.')
   return data
 }
 

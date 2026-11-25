@@ -46,7 +46,9 @@ export default function PersonnelPage() {
 
   const [search, setSearch] = useState('')
   const debouncedSearch = useDebouncedValue(search, 300)
-  const [status, setStatus] = useState<RosterStatusFilter>('active')
+  // Everyone still with the agency — hired guards whether active, on leave or
+  // suspended — each row showing their own status.
+  const [status, setStatus] = useState<RosterStatusFilter>('employed')
   const [addOpen, setAddOpen] = useState(false)
   const [branchId, setBranchId] = useState('')
   const [page, setPage] = useState(1)
@@ -238,7 +240,7 @@ export default function PersonnelPage() {
     <>
       <PageHeader
         title="Personnel roster"
-        description="Everyone on the roster and where they're posted. Filter by Resigned to find former personnel and re-hire them."
+        description="Hired personnel, their status and where they're posted. Opens on everyone currently employed; filter by Resigned to find former personnel and re-hire them."
         actions={
           <>
             <Button
@@ -323,7 +325,7 @@ export default function PersonnelPage() {
               setSearch(e.target.value)
               setPage(1)
             }}
-            placeholder="Search name or employee no…"
+            placeholder="Search name, employee no or licence ID…"
             aria-label="Search personnel"
             className="h-10 w-full rounded-lg border border-[var(--app-border)] bg-[var(--app-surface)] pr-3 pl-9 text-sm text-[var(--app-text)] shadow-[0_1px_1px_rgb(15_23_42/0.03)] transition-[border-color,box-shadow] placeholder:text-[var(--app-text-subtle)] focus:border-brand-500 focus:ring-[3px] focus:ring-brand-500/15 focus:outline-none"
           />
@@ -332,13 +334,14 @@ export default function PersonnelPage() {
         <Field label="">
           <Select
             aria-label="Employment status"
-            placeholder="All statuses"
+            placeholder="Everyone (incl. resigned & terminated)"
             value={status}
             onChange={(e) => {
               setStatus(e.target.value as RosterStatusFilter)
               setPage(1)
             }}
             options={[
+              { value: 'employed', label: 'Currently employed (active, on leave, suspended)' },
               ...EMPLOYMENT_STATUSES.map((s) => ({
                 value: s.value,
                 label: s.label,

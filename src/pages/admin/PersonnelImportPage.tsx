@@ -23,12 +23,17 @@ import { listBranchOptions } from '@/features/branches/api/branchesApi'
 import { downloadCsv } from '@/features/reports/api/reportsApi'
 import { importPersonnelRow } from '@/features/personnel/api/personnelApi'
 import {
+  CIVIL_STATUS_OPTIONS,
   EMPTY_ROW,
   IMPORT_COLUMNS,
+  IMPORT_SECTIONS,
   SHIFT_OPTIONS,
   STATUS_OPTIONS,
   TEMPLATE_EXAMPLES,
+  columnGroup,
+  columnHelp,
   columnKind,
+  columnTitle,
   duplicateEmployeeNos,
   findFacility,
   normalizeValue,
@@ -43,6 +48,26 @@ import {
   type RowValues,
   type WorkbookSheet,
 } from '@/features/personnel/import/personnelCsv'
+import { GUIDE_SHEET, downloadImportTemplate } from '@/features/personnel/import/templateXlsx'
+
+type Column = (typeof IMPORT_COLUMNS)[number]
+
+const SECTION_TITLE = new Map<string, string>(IMPORT_SECTIONS.map((s) => [s.id, s.title]))
+
+/** Runs of neighbouring columns in the same section, for the heading band. */
+function sectionBands(columns: Column[]) {
+  const bands: { id: string; title: string; span: number }[] = []
+  for (const c of columns) {
+    const last = bands[bands.length - 1]
+    if (last?.id === c.section) last.span++
+    else bands.push({ id: c.section, title: SECTION_TITLE.get(c.section) ?? '', span: 1 })
+  }
+  return bands
+}
+
+/** True when any Personal Data Sheet column holds something. */
+const hasPdsData = (values: RowValues[]) =>
+  values.some((v) => IMPORT_COLUMNS.some((c) => c.group === 'pds' && v[c.key] !== ''))
 
 type RowState = 'ready' | 'importing' | 'imported' | 'failed'
 
@@ -85,6 +110,12 @@ export default function PersonnelImportPage() {
   const [page, setPage] = useState(1)
   const [importing, setImporting] = useState(false)
   const [progress, setProgress] = useState({ done: 0, total: 0 })
+  // The Personal Data Sheet adds ~50 columns; they are shown when the file
+  // has any of that data, and can be toggled either way.
+  const [showPds, setShowPds] = useState(false)
+  const columns: Column[] = showPds
+    ? [...IMPORT_COLUMNS]
+    : IMPORT_COLUMNS.filter((c) => c.group !== 'pds')
 
   const facilitiesQuery = useQuery({
     queryKey: queryKeys.branches.options(),
@@ -144,7 +175,9 @@ export default function PersonnelImportPage() {
   /* ------------------------------------------------------------- loading */
 
   function loadSheets(all: WorkbookSheet[], choice: string) {
-    const chosen = choice === 'all' ? all : all.filter((s) => s.name === choice)
+    // The template's Guide sheet explains the columns; it holds no guards.
+    const chosen =
+      choice === 'all' ? all.filter((s) => s.name !== GUIDE_SHEET) : all.filter((s) => s.name === choice)
     const parsed = chosen.map((s) => {
       try {
         return rowsFromTable(s.table)
@@ -155,6 +188,7 @@ export default function PersonnelImportPage() {
     const values = parsed.flatMap((p) => p.rows)
     if (values.length === 0) throw new Error('No personnel rows were found in this file.')
     setRows(toImportRows(values))
+    setShowPds(hasPdsData(values))
     setIgnoredHeaders([...new Set(parsed.flatMap((p) => p.ignoredHeaders))])
     setPage(1)
     setFilter('all')
@@ -174,6 +208,7 @@ export default function PersonnelImportPage() {
         if (parsed.rows.length === 0) throw new Error('No personnel rows were found in this file.')
         setSheets(null)
         setRows(toImportRows(parsed.rows))
+        setShowPds(hasPdsData(parsed.rows))
         setIgnoredHeaders(parsed.ignoredHeaders)
         setPage(1)
         setFilter('all')
@@ -189,6 +224,13 @@ export default function PersonnelImportPage() {
   }
 
   function downloadTemplate() {
+    downloadImportTemplate().catch((error) =>
+      toast.error('Could not create the template', errorMessage(error)),
+    )
+  }
+
+  /** For anyone working outside Excel. The .xlsx keeps long numbers safer. */
+  function downloadCsvTemplate() {
     downloadCsv(
       'personnel-import-template',
       TEMPLATE_EXAMPLES.map((r) => ({ ...EMPTY_ROW, ...r })),
@@ -347,7 +389,11 @@ export default function PersonnelImportPage() {
       />
 
       {rows.length === 0 ? (
-        <Guide onTemplate={downloadTemplate} onFile={(f) => void onFile(f)} />
+        <Guide
+          onTemplate={downloadTemplate}
+          onCsvTemplate={downloadCsvTemplate}
+          onFile={(f) => void onFile(f)}
+        />
       ) : (
         <>
           <Card className="mb-4">
@@ -407,6 +453,16 @@ export default function PersonnelImportPage() {
                   Imported {counts.imported}
                 </FilterChip>
               </div>
+
+              <label className="flex items-center gap-2 text-sm text-[var(--app-text-muted)]">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 accent-[var(--color-brand-500)]"
+                  checked={showPds}
+                  onChange={(e) => setShowPds(e.target.checked)}
+                />
+                Personal Data Sheet columns
+              </label>
 
               <div className="ml-auto flex flex-wrap items-center gap-2">
                 <Button variant="ghost" size="sm" onClick={clearAll} disabled={importing}>
@@ -470,11 +526,36 @@ export default function PersonnelImportPage() {
             <div className="overflow-x-auto">
               <table className="min-w-max border-collapse text-xs">
                 <thead className="bg-[var(--app-bg)] text-left text-[11px] font-semibold tracking-wide text-[var(--app-text-subtle)] uppercase">
+                  {/* The Personal Data Sheet's sections, as on the personnel page. */}
+                  <tr className="border-b border-[var(--app-border)]">
+                    <th className="sticky left-0 z-10 bg-[var(--app-bg)]" />
+                    <th />
+                    {sectionBands(columns).map((b) => (
+                      <th
+                        key={b.id}
+                        colSpan={b.span}
+                        scope="colgroup"
+                        className="border-l border-[var(--app-border)] px-2 pt-2 pb-1.5 whitespace-nowrap text-[var(--app-text)] normal-case"
+                      >
+                        {b.title}
+                      </th>
+                    ))}
+                    <th />
+                  </tr>
                   <tr>
                     <th className="sticky left-0 z-10 bg-[var(--app-bg)] px-2 py-2">#</th>
                     <th className="px-2 py-2" style={{ minWidth: 260 }}>Check</th>
-                    {IMPORT_COLUMNS.map((c) => (
-                      <th key={c.key} className="px-2 py-2 whitespace-nowrap" style={{ minWidth: c.width }}>
+                    {columns.map((c, i) => (
+                      <th
+                        key={c.key}
+                        className={cn(
+                          'px-2 py-2 whitespace-nowrap',
+                          c.group === 'pds' && 'bg-success/5',
+                          i > 0 && columns[i - 1]!.section !== c.section && 'border-l border-[var(--app-border)]',
+                        )}
+                        style={{ minWidth: c.width }}
+                        title={c.header}
+                      >
                         {c.label}
                         {'required' in c && c.required && <span className="text-danger"> *</span>}
                       </th>
@@ -485,7 +566,7 @@ export default function PersonnelImportPage() {
                 <tbody className="divide-y divide-[var(--app-border)]">
                   {pageRows.length === 0 && (
                     <tr>
-                      <td colSpan={IMPORT_COLUMNS.length + 3} className="px-4 py-8 text-center text-sm text-[var(--app-text-muted)]">
+                      <td colSpan={columns.length + 3} className="px-4 py-8 text-center text-sm text-[var(--app-text-muted)]">
                         No rows in this view.
                       </td>
                     </tr>
@@ -495,6 +576,7 @@ export default function PersonnelImportPage() {
                       key={row.uid}
                       index={rows.indexOf(row) + 1}
                       row={row}
+                      columns={columns}
                       issues={issuesByRow.get(row.uid) ?? []}
                       facilities={facilities}
                       disabled={importing}
@@ -569,6 +651,7 @@ const CELL =
 function RowEditor({
   index,
   row,
+  columns,
   issues,
   facilities,
   disabled,
@@ -578,6 +661,7 @@ function RowEditor({
 }: {
   index: number
   row: ImportRow
+  columns: Column[]
   issues: RowIssue[]
   facilities: Facility[]
   disabled: boolean
@@ -648,7 +732,7 @@ function RowEditor({
         )}
       </td>
 
-      {IMPORT_COLUMNS.map((c) => {
+      {columns.map((c, i) => {
         const value = row.values[c.key]
         const level = levelFor(c.key)
         const cls = cn(
@@ -660,10 +744,12 @@ function RowEditor({
               : 'border-[var(--app-border)]',
         )
         const common = {
-          'aria-label': `${c.label}, row ${index}`,
+          'aria-label': `${columnTitle(c)}, row ${index}`,
           disabled: disabled || imported,
           className: cls,
-          title: issues.filter((i) => i.column === c.key).map((i) => i.message).join('\n') || undefined,
+          title:
+            issues.filter((i) => i.column === c.key).map((i) => i.message).join('\n') ||
+            columnHelp(c.key),
         }
 
         let options: { value: string; label: string }[] | null = null
@@ -683,10 +769,27 @@ function RowEditor({
           case 'facility':
             options = facilities.map((f) => ({ value: f.name, label: f.name }))
             break
+          case 'yesno':
+            options = [
+              { value: 'yes', label: 'Yes' },
+              { value: 'no', label: 'No' },
+            ]
+            break
+          case 'civil':
+            options = CIVIL_STATUS_OPTIONS.map((o) => ({ value: o.value, label: o.label }))
+            break
         }
 
         return (
-          <td key={c.key} className="px-1.5 py-1.5" style={{ minWidth: c.width }}>
+          <td
+            key={c.key}
+            className={cn(
+              'px-1.5 py-1.5',
+              columnGroup(c.key) === 'pds' && 'bg-success/[0.02]',
+              i > 0 && columns[i - 1]!.section !== c.section && 'border-l border-[var(--app-border)]',
+            )}
+            style={{ minWidth: c.width }}
+          >
             {options ? (
               <select
                 {...common}
@@ -713,7 +816,13 @@ function RowEditor({
               <input
                 {...common}
                 value={value}
-                placeholder={columnKind(c.key) === 'date' ? 'YYYY-MM-DD' : undefined}
+                placeholder={
+                  columnKind(c.key) === 'date'
+                    ? 'YYYY-MM-DD'
+                    : columnKind(c.key) === 'list'
+                      ? 'a; b; c | next entry'
+                      : undefined
+                }
                 onChange={(e) => onChange(row.uid, c.key, e.target.value)}
                 onBlur={() => onBlur(row.uid, c.key)}
               />
@@ -792,17 +901,28 @@ function DropZone({ onFile }: { onFile: (file: File) => void }) {
   )
 }
 
-function Guide({ onTemplate, onFile }: { onTemplate: () => void; onFile: (file: File) => void }) {
+function Guide({
+  onTemplate,
+  onCsvTemplate,
+  onFile,
+}: {
+  onTemplate: () => void
+  onCsvTemplate: () => void
+  onFile: (file: File) => void
+}) {
   return (
     <div className="grid gap-6 lg:grid-cols-3">
       <Card className="lg:col-span-2">
         <DropZone onFile={onFile} />
         <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
           <span className="text-xs text-[var(--app-text-muted)]">
-            Don’t have a file yet? Start from the template.
+            Don’t have a file yet? Start from the Excel template.{' '}
+            <button type="button" className="font-medium text-brand-600 hover:underline" onClick={onCsvTemplate}>
+              CSV version
+            </button>
           </span>
           <Button variant="secondary" size="sm" leftIcon={<Download className="h-4 w-4" />} onClick={onTemplate}>
-            Download template
+            Download template (.xlsx)
           </Button>
         </div>
       </Card>
@@ -810,12 +930,14 @@ function Guide({ onTemplate, onFile }: { onTemplate: () => void; onFile: (file: 
       <Card>
         <h2 className="text-base font-semibold text-[var(--app-text)]">Filling in the template</h2>
         <ul className="mt-3 space-y-2 text-sm text-[var(--app-text-muted)]">
-          <li><strong className="text-[var(--app-text)]">Required:</strong> last_name, first_name.</li>
+          <li><strong className="text-[var(--app-text)]">Order:</strong> the same sections, order and labels as the Personal Data Sheet on a personnel record, with the section named above each group of columns. Posting and status (facility, status…) come last.</li>
+          <li><strong className="text-[var(--app-text)]">Required:</strong> First name and Last name only — leave anything you don’t have blank.</li>
+          <li><strong className="text-[var(--app-text)]">Lists</strong> (dependents, employment, trainings, references): one entry per line (Alt+Enter), parts separated by “;”.</li>
           <li><strong className="text-[var(--app-text)]">Dates:</strong> YYYY-MM-DD is safest; 04/30/2024 and 30 April 2024 are read too.</li>
-          <li><strong className="text-[var(--app-text)]">facility:</strong> the facility’s name or code, exactly as on the Area page.</li>
-          <li><strong className="text-[var(--app-text)]">status:</strong> Active, On leave, Suspended, Resigned, Terminated or Blocklisted. Suspended, Terminated and Blocklisted need a status_reason.</li>
-          <li><strong className="text-[var(--app-text)]">Long numbers</strong> (Pag-IBIG, PhilHealth): in Excel, format those columns as Text before typing, or upload the .xlsx instead of a CSV.</li>
-          <li><strong className="text-[var(--app-text)]">employee_no:</strong> leave blank to generate one.</li>
+          <li><strong className="text-[var(--app-text)]">Yes/No questions:</strong> Yes or No (Y / N, Oo / Wala work too).</li>
+          <li><strong className="text-[var(--app-text)]">Facility:</strong> the name or code, exactly as on the Area page.</li>
+          <li><strong className="text-[var(--app-text)]">Status:</strong> Suspended, Terminated and Blocklisted need a Status Reason.</li>
+          <li>The <strong className="text-[var(--app-text)]">Guide</strong> sheet in the template explains every column.</li>
         </ul>
       </Card>
 
@@ -824,7 +946,7 @@ function Guide({ onTemplate, onFile }: { onTemplate: () => void; onFile: (file: 
         <ol className="mt-3 list-inside list-decimal space-y-2 text-sm text-[var(--app-text-muted)]">
           <li>
             <strong className="text-[var(--app-text)]">Download the template</strong> and fill one row per
-            guard. Delete the two example rows.
+            guard — the whole Personal Data Sheet fits on that row. Delete the two example rows.
           </li>
           <li>
             <strong className="text-[var(--app-text)]">Upload</strong> it as .csv, or upload the Excel

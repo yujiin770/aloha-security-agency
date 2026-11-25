@@ -236,7 +236,78 @@ export type BranchRow = {
   updated_at: string
 }
 
-export type ApplicantRow = {
+/* -------------------------------------------------------------------------- */
+/* Personal Data Sheet (0032) — on both applicants and personnel               */
+/* -------------------------------------------------------------------------- */
+
+export type PdsTraining = { training: string; school: string; dates: string }
+export type PdsDependent = {
+  name: string
+  birth_date: string
+  relationship: string
+  address: string
+}
+export type PdsEmployment = {
+  employer: string
+  from: string
+  to: string
+  salary: string
+  reason: string
+}
+export type PdsReference = { name: string; company: string; position: string; contact: string }
+
+/** The paper Personal Data Sheet's fields beyond the core application (0032). */
+export type PdsFields = {
+  place_of_birth: string | null
+  provincial_address: string | null
+  religion: string | null
+  father_name: string | null
+  father_occupation: string | null
+  mother_name: string | null
+  mother_occupation: string | null
+  parents_address: string | null
+  spouse_name: string | null
+  spouse_occupation: string | null
+  spouse_address: string | null
+  special_skills: string | null
+  has_loans: boolean | null
+  loan_details: string | null
+  badge_no: string | null
+  license_control_no: string | null
+  res_cert_no: string | null
+  res_cert_issued_on: string | null
+  res_cert_issued_at: string | null
+  emergency_contact_name: string | null
+  emergency_contact_phone: string | null
+  emergency_contact_relationship: string | null
+  emergency_contact_occupation: string | null
+  date_graduated: string | null
+  school_name: string | null
+  course: string | null
+  military_pnp: boolean | null
+  military_afp: boolean | null
+  military_rotc: boolean | null
+  military_branch: string | null
+  military_serial_no: string | null
+  military_rank: string | null
+  military_status: string | null
+  military_years_service: number | null
+  military_reason_leaving: string | null
+  recommended_by: string | null
+  has_criminal_record: boolean | null
+  criminal_record_details: string | null
+  drinks_alcohol: boolean | null
+  smokes: boolean | null
+  health_problems: string | null
+  willing_background_check: boolean | null
+  willing_any_assignment: boolean | null
+  trainings: PdsTraining[]
+  dependents: PdsDependent[]
+  employment_history: PdsEmployment[]
+  character_references: PdsReference[]
+}
+
+export type ApplicantRow = PdsFields & {
   id: string
   reference_no: string
   first_name: string
@@ -316,7 +387,7 @@ export type ApplicantStatusHistoryRow = {
   created_at: string
 }
 
-export type PersonnelRow = {
+export type PersonnelRow = PdsFields & {
   id: string
   employee_no: string
   applicant_id: string | null
@@ -331,12 +402,15 @@ export type PersonnelRow = {
   sex: SexType | null
   /** 0029 */
   address: string | null
+  /** 0032: copied from and kept in step with the application. */
+  civil_status: CivilStatus | null
+  height_cm: number | null
+  weight_kg: number | null
+  highest_education: string | null
   date_hired: string
   date_separated: string | null
   employment_status: EmploymentStatus
   photo_path: string | null
-  emergency_contact_name: string | null
-  emergency_contact_phone: string | null
   sss_no: string | null
   philhealth_no: string | null
   pagibig_no: string | null

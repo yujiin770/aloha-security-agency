@@ -33,9 +33,10 @@ export default function ApplicantsPage() {
   const [search, setSearch] = useState('')
   const debouncedSearch = useDebouncedValue(search, 300)
   const [showFilters, setShowFilters] = useState(false)
-  // Archived applications are hidden by default; picking the Archived status
-  // filter shows them regardless.
-  const [includeArchived, setIncludeArchived] = useState(false)
+  // Closed applications are hidden by default: hired applicants have moved to
+  // the personnel roster, rejected and archived ones are done. Picking one of
+  // those statuses in the filter shows them regardless.
+  const [includeClosed, setIncludeClosed] = useState(false)
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE)
   const [sort, setSort] = useState<SortState>({
@@ -70,7 +71,7 @@ export default function ApplicantsPage() {
     status,
     positionId,
     branchId,
-    includeArchived,
+    includeClosed,
     page,
     pageSize,
     sortColumn: sort.column,
@@ -197,7 +198,7 @@ export default function ApplicantsPage() {
     <>
       <PageHeader
         title="Applicants"
-        description="Every application, from submission through to hire or rejection."
+        description="Applications still in progress. Hired applicants move to the Personnel Roster; rejected and archived ones are hidden — use “Show closed” to see them."
         actions={
           <Button
             variant="secondary"
@@ -239,12 +240,12 @@ export default function ApplicantsPage() {
         </Button>
 
         <InactiveToggle
-          checked={includeArchived}
+          checked={includeClosed}
           onChange={(next) => {
-            setIncludeArchived(next)
+            setIncludeClosed(next)
             setPage(1)
           }}
-          label="archived"
+          label="closed"
         />
 
         {activeFilterCount > 0 && (

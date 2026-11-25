@@ -14,12 +14,15 @@ export function PageHeader({
   actions,
   breadcrumbs,
   className,
+  actionsClassName,
 }: {
   title: ReactNode
   description?: ReactNode
   actions?: ReactNode
   breadcrumbs?: Crumb[]
   className?: string
+  /** e.g. `w-full sm:w-auto` to give the actions their own full-width row on phones. */
+  actionsClassName?: string
 }) {
   return (
     <div className={cn('mb-6', className)}>
@@ -48,14 +51,20 @@ export function PageHeader({
 
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
-          <h1 className="text-xl font-semibold tracking-tight text-[var(--app-text)] sm:text-2xl">
+          <h1 className="text-xl font-semibold tracking-tight break-words text-[var(--app-text)] sm:text-2xl">
             {title}
           </h1>
           {description && (
-            <p className="mt-1 text-sm text-[var(--app-text-muted)]">{description}</p>
+            <div className="mt-1 text-sm text-[var(--app-text-muted)]">{description}</div>
           )}
         </div>
-        {actions && <div className="flex shrink-0 flex-wrap gap-2">{actions}</div>}
+        {/* max-w-full: several buttons wrap onto more lines instead of pushing
+            the page wider than a phone screen. */}
+        {actions && (
+          <div className={cn('flex max-w-full flex-wrap gap-2 sm:shrink-0', actionsClassName)}>
+            {actions}
+          </div>
+        )}
       </div>
     </div>
   )

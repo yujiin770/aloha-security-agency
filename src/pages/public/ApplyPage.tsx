@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { useForm, useWatch, type FieldPath } from 'react-hook-form'
+import { useForm, useWatch, type FieldPath, type UseFormReturn } from 'react-hook-form'
 import { useQuery } from '@tanstack/react-query'
 import { motion } from 'framer-motion'
 import {
@@ -42,6 +42,8 @@ import { listBranchOptions } from '@/features/branches/api/branchesApi'
 import { queryKeys } from '@/lib/queryKeys'
 import { toAppError } from '@/lib/errors'
 import { useFormDraft } from '@/hooks/useFormDraft'
+import { PdsFormSections } from '@/features/pds/PdsFormSections'
+import type { PdsFormValues } from '@/features/pds/pdsSchema'
 import { useOnlineStatus } from '@/hooks/useOnlineStatus'
 import { usePublicPositions } from '@/features/config/hooks/useConfig'
 import { CIVIL_STATUSES } from '@/utils/constants'
@@ -67,6 +69,8 @@ const STEPS = [
   { id: 'address', title: 'Address' },
   { id: 'position', title: 'Position' },
   { id: 'credentials', title: 'Credentials' },
+  { id: 'family', title: 'Family & background' },
+  { id: 'history', title: 'Education & history' },
   { id: 'documents', title: 'Documents' },
   { id: 'review', title: 'Review' },
 ] as const
@@ -75,9 +79,20 @@ const STEP_FIELDS: Record<number, FieldPath<ApplicationFormValues>[]> = {
   0: ['first_name', 'middle_name', 'last_name', 'suffix', 'email', 'phone', 'birth_date', 'sex', 'civil_status', 'height_cm', 'weight_kg'],
   1: ['address_line', 'barangay', 'city_municipality', 'province', 'region', 'postal_code'],
   2: ['position_id', 'preferred_branch_id', 'years_experience', 'highest_education', 'expected_salary', 'availability_date', 'source'],
-  3: ['sss_no', 'philhealth_no', 'pagibig_no', 'tin_no', 'nbi_clearance_no', 'nbi_clearance_expiry', 'police_clearance_no', 'is_licensed', 'security_license_no', 'security_license_expiry'],
-  4: [],
-  5: ['consent_data', 'consent_accuracy'],
+  3: ['sss_no', 'philhealth_no', 'pagibig_no', 'tin_no', 'nbi_clearance_no', 'nbi_clearance_expiry', 'police_clearance_no', 'is_licensed', 'security_license_no', 'security_license_expiry', 'badge_no', 'license_control_no', 'res_cert_no', 'res_cert_issued_on', 'res_cert_issued_at'],
+  4: [
+    'place_of_birth', 'provincial_address', 'religion', 'father_name', 'father_occupation',
+    'mother_name', 'mother_occupation', 'parents_address', 'spouse_name', 'spouse_occupation',
+    'spouse_address', 'emergency_contact_name', 'emergency_contact_relationship',
+    'emergency_contact_phone', 'emergency_contact_occupation', 'military_pnp', 'military_afp',
+    'military_rotc', 'military_branch', 'military_serial_no', 'military_rank', 'military_status',
+    'military_years_service', 'military_reason_leaving', 'special_skills', 'has_loans',
+    'loan_details', 'has_criminal_record', 'criminal_record_details', 'drinks_alcohol', 'smokes',
+    'health_problems', 'willing_background_check', 'willing_any_assignment', 'recommended_by',
+  ],
+  5: ['school_name', 'course', 'date_graduated', 'trainings', 'dependents', 'employment_history', 'character_references'],
+  6: [],
+  7: ['consent_data', 'consent_accuracy'],
 }
 
 const DOCUMENT_SLOTS: {
@@ -141,6 +156,10 @@ export default function ApplyPage() {
   // `useWatch` rather than `form.watch()`: the latter returns a fresh function
   // each render, which makes React Compiler skip memoizing this whole (large)
   // component.
+  // The Personal Data Sheet sections are shared with the staff dialogs and
+  // typed against their own values, a subset of this form's.
+  const pdsForm = form as unknown as UseFormReturn<PdsFormValues>
+
   const isLicensed = useWatch({ control: form.control, name: 'is_licensed' })
   const selectedPositionId = useWatch({ control: form.control, name: 'position_id' })
   const selectedPosition = positions.find((p) => p.id === selectedPositionId)
@@ -377,7 +396,7 @@ export default function ApplyPage() {
         Application form
       </h1>
       <p className="mt-2 text-sm text-[var(--app-text-muted)]">
-        Takes about ten minutes. Fields marked{' '}
+        Takes about twenty minutes. Fields marked{' '}
         <span className="text-brand-500">*</span> are required. Your answers are
         saved on this device as you go, so it is safe to close the page and come
         back.
@@ -430,7 +449,7 @@ export default function ApplyPage() {
           />
         </div>
 
-        <ol className="mt-4 grid grid-cols-6 gap-1">
+        <ol className="mt-4 grid grid-cols-8 gap-1">
           {STEPS.map((s, index) => {
             const done = index < step
             const current = index === step
@@ -734,11 +753,33 @@ export default function ApplyPage() {
                   </div>
                 )}
               </div>
+
+              <div className="border-t border-[var(--app-border)] pt-5">
+                <PdsFormSections form={pdsForm} sections={['ids']} />
+              </div>
             </div>
           )}
 
-          {/* 4 — Documents ------------------------------------------------ */}
+          {/* 4 — Family & background ------------------------------------- */}
           {step === 4 && (
+            <PdsFormSections
+              form={pdsForm}
+              sections={['family', 'emergency', 'military', 'other']}
+              required
+            />
+          )}
+
+          {/* 5 — Education & history ------------------------------------- */}
+          {step === 5 && (
+            <PdsFormSections
+              form={pdsForm}
+              sections={['education', 'dependents', 'employment', 'references']}
+              required
+            />
+          )}
+
+          {/* 6 — Documents ------------------------------------------------ */}
+          {step === 6 && (
             <div className="space-y-5">
               <p className="text-sm text-[var(--app-text-muted)]">
                 Upload what you have to hand. Anything missing can be brought to
@@ -759,8 +800,8 @@ export default function ApplyPage() {
             </div>
           )}
 
-          {/* 5 — Review --------------------------------------------------- */}
-          {step === 5 && (
+          {/* 7 — Review --------------------------------------------------- */}
+          {step === 7 && (
             <div className="space-y-5">
               <ReviewSummary
                 values={form.getValues()}
@@ -887,6 +928,8 @@ export default function ApplyPage() {
 
 /* -------------------------------------------------------------------------- */
 
+const count = (n: number) => (n === 0 ? 'None listed' : `${n} listed`)
+
 function ReviewSummary({
   values,
   files,
@@ -907,6 +950,23 @@ function ReviewSummary({
     ['Position', positionName],
     ['Experience', `${values.years_experience || 0} year(s)`],
     ['Licensed', values.is_licensed ? `Yes — ${values.security_license_no}` : 'No'],
+    ['Place of birth', values.place_of_birth],
+    [
+      'Emergency contact',
+      [values.emergency_contact_name, values.emergency_contact_relationship, values.emergency_contact_phone]
+        .filter((v) => v?.trim())
+        .join(' · '),
+    ],
+    ['Dependents', count(values.dependents.filter((d) => d.name.trim()).length)],
+    ['Previous employers', count(values.employment_history.filter((e) => e.employer.trim()).length)],
+    ['Security trainings', count(values.trainings.filter((t) => t.training.trim()).length)],
+    [
+      'Character references',
+      values.character_references
+        .map((r) => r.name.trim())
+        .filter(Boolean)
+        .join(', '),
+    ],
   ]
 
   return (

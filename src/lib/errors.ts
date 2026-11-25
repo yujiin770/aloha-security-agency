@@ -32,6 +32,14 @@ const CONSTRAINT_MESSAGES: Record<string, string> = {
   applicants_rejection_reason_chk: 'A reason is required when rejecting an applicant.',
   applicants_email_format_chk: 'Please enter a valid email address.',
   applicants_phone_format_chk: 'Please enter a valid phone number.',
+  applicants_email_unique_idx: 'Another application already uses that email address.',
+  applicants_height_chk: 'Height must be between 100 and 250 cm.',
+  applicants_weight_chk: 'Weight must be between 30 and 250 kg.',
+  personnel_separation_chk: 'The separation date cannot fall before the date hired.',
+  applicants_pds_chk:
+    'Too many entries: at most 5 trainings, employers and references, and 10 dependents.',
+  personnel_pds_chk:
+    'Too many entries: at most 5 trainings, employers and references, and 10 dependents.',
   branches_code_unique: 'A branch with that code already exists.',
   branches_code_shape_chk:
     'Branch codes may contain only capital letters, digits and hyphens.',

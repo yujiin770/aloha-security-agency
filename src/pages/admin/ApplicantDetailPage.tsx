@@ -10,6 +10,7 @@ import {
   FileImage,
   FileText,
   Mail,
+  Pencil,
   Phone,
   RotateCcw,
   ScanSearch,
@@ -37,14 +38,20 @@ import {
   hireApplicant,
   listApplicantDocuments,
   notifyApplicantOfStatus,
+  updateApplicant,
   updateApplicantStatus,
   verifyDocument,
 } from '@/features/applicants/api/applicantsApi'
 import type { NotifyOutcome } from '@/features/applicants/api/applicantsApi'
+import { EditApplicantDialog } from '@/features/applicants/components/EditApplicantDialog'
+import { PdsDetails } from '@/features/pds/PdsDetails'
+import { getPersonnelForApplicant } from '@/features/personnel/api/personnelApi'
+import { EditPdsDialog } from '@/features/pds/EditPdsDialog'
 import {
   APPLICANT_TRANSITIONS,
   applicantStatusMeta,
   documentTypeMeta,
+  employmentStatusMeta,
   sortByPipeline,
   ADMIN_ROLES,
   SHIFTS,
@@ -97,7 +104,7 @@ export default function ApplicantDetailPage() {
   const navigate = useNavigate()
   const toast = useToast()
   const qc = useQueryClient()
-  const { user } = useAuth()
+  const { user, hasRole } = useAuth()
 
   const [statusTarget, setStatusTarget] = useState<ApplicantStatus | null>(null)
   const [rejectionReason, setRejectionReason] = useState('')
@@ -105,6 +112,8 @@ export default function ApplicantDetailPage() {
   const [note, setNote] = useState('')
   const [notify, setNotify] = useState(true)
   const [hireOpen, setHireOpen] = useState(false)
+  const [editOpen, setEditOpen] = useState(false)
+  const [pdsOpen, setPdsOpen] = useState(false)
   // The facility the new hire is deployed to (0028); starts on their preferred one.
   const [facilityId, setFacilityId] = useState('')
   const [shift, setShift] = useState<ShiftType>('day')
@@ -121,6 +130,14 @@ export default function ApplicantDetailPage() {
     queryFn: listBranchOptions,
     staleTime: 5 * 60_000,
     enabled: hireOpen,
+  })
+
+  // A hired applicant lives on the personnel roster now; link straight to it.
+  const personnelRecord = useQuery({
+    queryKey: [...queryKeys.personnel.all, 'by-applicant', id],
+    queryFn: () => getPersonnelForApplicant(id),
+    enabled: Boolean(id) && applicant.data?.status === 'hired',
+    retry: false,
   })
 
   const documents = useQuery({
@@ -373,6 +390,16 @@ export default function ApplicantDetailPage() {
             <Badge tone={statusMeta?.tone ?? 'neutral'} dot>
               {statusMeta?.label}
             </Badge>
+            {/* Mirrors applicants_update_staff (0015). */}
+            <Can roles={[...ADMIN_ROLES, 'hr_staff', 'recruitment_officer']}>
+              <Button
+                variant="secondary"
+                leftIcon={<Pencil className="h-4 w-4" />}
+                onClick={() => setEditOpen(true)}
+              >
+                Edit information
+              </Button>
+            </Can>
             {a.status === 'interview' && (
               <Can roles={[...ADMIN_ROLES, 'hr_staff']}>
                 <Button
@@ -389,6 +416,30 @@ export default function ApplicantDetailPage() {
           </>
         }
       />
+
+      {a.status === 'hired' && (
+        <Card className="mb-6 border-success/30 bg-success-soft">
+          <div className="flex flex-wrap items-center gap-3">
+            <UserPlus className="h-5 w-5 shrink-0 text-success" aria-hidden="true" />
+            <p className="min-w-0 flex-1 text-sm text-[var(--app-text)]">
+              Hired — this applicant has moved to the Personnel Roster
+              {personnelRecord.data ? (
+                <>
+                  {' '}as <span className="font-mono">{personnelRecord.data.employee_no}</span>
+                  {' '}({employmentStatusMeta(personnelRecord.data.employment_status)?.label}).
+                </>
+              ) : (
+                '.'
+              )}
+            </p>
+            {personnelRecord.data && (
+              <Link to={`/admin/personnel/${personnelRecord.data.id}`}>
+                <Button size="sm">Open personnel record</Button>
+              </Link>
+            )}
+          </div>
+        </Card>
+      )}
 
       {/* Pipeline actions ------------------------------------------------- */}
       <Can roles={[...ADMIN_ROLES, 'hr_staff', 'recruitment_officer']}>
@@ -470,6 +521,7 @@ export default function ApplicantDetailPage() {
               items={[
                 ['Position applied', positionLookup.name(a.position_id)],
                 ['Experience', `${a.years_experience} year(s)`],
+                ['Date applied', formatDate(a.created_at)],
                 ['Highest education', a.highest_education ?? '—'],
                 ['Expected salary', formatCurrency(a.expected_salary)],
                 ['Available from', formatDate(a.availability_date)],
@@ -502,6 +554,16 @@ export default function ApplicantDetailPage() {
               ]}
             />
           </Card>
+
+          {/* Personal Data Sheet (0032) ----------------------------------- */}
+          <PdsDetails
+            record={a}
+            onEdit={
+              hasRole(...ADMIN_ROLES, 'hr_staff', 'recruitment_officer')
+                ? () => setPdsOpen(true)
+                : undefined
+            }
+          />
 
           {/* Documents ---------------------------------------------------- */}
           <Card padded={false}>
@@ -686,6 +748,32 @@ export default function ApplicantDetailPage() {
           </Card>
         </div>
       </div>
+
+      <EditApplicantDialog
+        open={editOpen}
+        applicant={a}
+        onClose={() => setEditOpen(false)}
+        onResume={() => setEditOpen(true)}
+      />
+
+      <EditPdsDialog
+        open={pdsOpen}
+        draftId="pds.applicant"
+        recordId={a.id}
+        record={a}
+        description={
+          a.status === 'hired'
+            ? `${a.reference_no} · Hired: changes are also saved to their personnel roster record.`
+            : a.reference_no
+        }
+        onSave={(patch) => updateApplicant(a.id, patch)}
+        onSaved={() => {
+          void qc.invalidateQueries({ queryKey: queryKeys.applicants.all })
+          if (a.status === 'hired') void qc.invalidateQueries({ queryKey: queryKeys.personnel.all })
+        }}
+        onClose={() => setPdsOpen(false)}
+        onResume={() => setPdsOpen(true)}
+      />
 
       {/* Document preview ------------------------------------------------- */}
       <ImageViewer

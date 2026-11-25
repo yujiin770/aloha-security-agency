@@ -1,14 +1,16 @@
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   AlertOctagon,
   ArrowLeft,
   Ban,
+  ChevronDown,
   FileDown,
   Mail,
   MapPinned,
   PauseCircle,
+  Pencil,
   Phone,
   PlayCircle,
   ShieldAlert,
@@ -22,19 +24,25 @@ import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { ErrorState, LoadingState } from '@/components/ui/Feedback'
 import { useToast } from '@/components/ui/Toast'
-import { Can } from '@/app/guards'
 import { queryKeys } from '@/lib/queryKeys'
 import { errorMessage } from '@/lib/errors'
 import {
   getPersonnel,
   getPersonnelDeployments,
   listPersonnelActions,
+  updatePersonnel,
 } from '@/features/personnel/api/personnelApi'
+import { getApplicant } from '@/features/applicants/api/applicantsApi'
+import { usePositionLookup } from '@/features/config/hooks/useConfig'
+import { useAuth } from '@/contexts/AuthContext'
+import { PdsDetails } from '@/features/pds/PdsDetails'
+import { EditPdsDialog } from '@/features/pds/EditPdsDialog'
 import {
   PersonnelActionDialog,
   type PersonnelActionKind,
 } from '@/features/personnel/components/PersonnelActionDialog'
 import { PersonnelActionLog } from '@/features/personnel/components/PersonnelActionLog'
+import { EditPersonnelDialog } from '@/features/personnel/components/EditPersonnelDialog'
 import { downloadPersonalDataSheet } from '@/features/personnel/export/personalDataSheet'
 import { listBranches } from '@/features/branches/api/branchesApi'
 import {
@@ -50,6 +58,7 @@ import {
   humanize,
   maskId,
 } from '@/utils/format'
+import { formatFeetInches, formatPounds } from '@/utils/units'
 
 /** Administrators and HR — mirrors assert_can_discipline_personnel() (0027). */
 const DISCIPLINE_ROLES = [...ADMIN_ROLES, 'hr_staff'] as const
@@ -58,6 +67,11 @@ export default function PersonnelDetailPage() {
   const { id = '' } = useParams()
   const [action, setAction] = useState<PersonnelActionKind | null>(null)
   const [exporting, setExporting] = useState(false)
+  const [editOpen, setEditOpen] = useState(false)
+  const [pdsOpen, setPdsOpen] = useState(false)
+  const qc = useQueryClient()
+  const { hasRole } = useAuth()
+  const positionLookup = usePositionLookup()
   const toast = useToast()
 
   const person = useQuery({
@@ -73,6 +87,16 @@ export default function PersonnelDetailPage() {
     enabled: Boolean(id),
   })
   const rehires = (actions.data ?? []).filter((a) => a.action_type === 'rehire')
+
+  // The application this guard was hired from: date applied and position
+  // applied for live there. A role without access to applicants just sees '—'.
+  const applicantId = person.data?.applicant_id ?? ''
+  const application = useQuery({
+    queryKey: queryKeys.applicants.detail(applicantId),
+    queryFn: () => getApplicant(applicantId),
+    enabled: Boolean(applicantId),
+    retry: false,
+  })
 
   const deployments = useQuery({
     queryKey: queryKeys.personnel.deployments(id),
@@ -143,6 +167,93 @@ export default function PersonnelDetailPage() {
   const branchName = (branchId: string) =>
     branches.data?.find((b) => b.id === branchId)?.name ?? branchId
 
+  const statusBadges = (
+    <>
+      <Badge tone={statusMeta?.tone ?? 'neutral'} dot>
+        {statusMeta?.label}
+      </Badge>
+      {p.is_blocklisted && (
+        <Badge tone="danger" dot>
+          Blocklisted
+        </Badge>
+      )}
+      {rehires.length > 0 && (
+        <span title={`Last re-hired ${formatDate(rehires[0]!.effective_date)}`}>
+          <Badge tone="info" dot>
+            Re-hired{rehires.length > 1 ? ` ×${rehires.length}` : ''}
+          </Badge>
+        </span>
+      )}
+    </>
+  )
+
+  // Rendered twice: in the sidebar on wide screens, and as a collapsible panel
+  // near the top on phones, where the sidebar would sit below everything else.
+  const disciplineButtons = (
+    <>
+      <Button
+        variant="secondary"
+        leftIcon={<AlertOctagon className="h-4 w-4" />}
+        onClick={() => setAction('violation')}
+      >
+        Record violation / offense
+      </Button>
+      {(p.employment_status === 'active' || p.employment_status === 'on_leave') && (
+        <Button
+          variant="secondary"
+          leftIcon={<PauseCircle className="h-4 w-4" />}
+          onClick={() => setAction('suspend')}
+        >
+          Suspend
+        </Button>
+      )}
+      {p.employment_status === 'suspended' && (
+        <Button
+          variant="secondary"
+          leftIcon={<PlayCircle className="h-4 w-4" />}
+          onClick={() => setAction('lift')}
+        >
+          Lift suspension
+        </Button>
+      )}
+      {employed && (
+        <>
+          <Button
+            variant="secondary"
+            leftIcon={<UserMinus className="h-4 w-4" />}
+            onClick={() => setAction('resign')}
+          >
+            Record resignation
+          </Button>
+          <Button
+            variant="secondary"
+            leftIcon={<UserX className="h-4 w-4" />}
+            onClick={() => setAction('terminate')}
+          >
+            Terminate
+          </Button>
+        </>
+      )}
+      {canRehire && (
+        <Button
+          variant="secondary"
+          leftIcon={<UserCheck className="h-4 w-4" />}
+          onClick={() => setAction('rehire')}
+        >
+          Re-hire
+        </Button>
+      )}
+      <Button
+        variant="danger"
+        leftIcon={<Ban className="h-4 w-4" />}
+        onClick={() => setAction('blocklist')}
+      >
+        Blocklist (remove from company)
+      </Button>
+    </>
+  )
+  const canDiscipline = !p.is_blocklisted && hasRole(...DISCIPLINE_ROLES)
+
   return (
     <>
       <PageHeader
@@ -151,36 +262,37 @@ export default function PersonnelDetailPage() {
           { label: p.employee_no },
         ]}
         title={fullName(p)}
+        className="mb-4 sm:mb-6"
         description={
-          <span className="flex flex-wrap items-center gap-2">
-            <span className="font-mono">{p.employee_no}</span>
-            {currentFacility && (
-              <>
-                <span aria-hidden="true">·</span>
-                <span>{currentFacility.branch_name ?? 'Facility'}</span>
-              </>
-            )}
-          </span>
+          <div className="space-y-2">
+            <span className="flex flex-col gap-0.5 sm:flex-row sm:flex-wrap sm:items-center sm:gap-2">
+              <span className="font-mono">{p.employee_no}</span>
+              {currentFacility && (
+                <>
+                  <span aria-hidden="true" className="hidden sm:inline">
+                    ·
+                  </span>
+                  <span>{currentFacility.branch_name ?? 'Facility'}</span>
+                </>
+              )}
+            </span>
+            <div className="flex flex-wrap items-center gap-1.5">{statusBadges}</div>
+          </div>
         }
+        actionsClassName="w-full sm:w-auto"
         actions={
-          <>
-            <Badge tone={statusMeta?.tone ?? 'neutral'} dot>
-              {statusMeta?.label}
-            </Badge>
-            {p.is_blocklisted && (
-              <Badge tone="danger" dot>
-                Blocklisted
-              </Badge>
-            )}
-            {rehires.length > 0 && (
-              <span title={`Last re-hired ${formatDate(rehires[0]!.effective_date)}`}>
-                <Badge tone="info" dot>
-                  Re-hired{rehires.length > 1 ? ` ×${rehires.length}` : ''}
-                </Badge>
-              </span>
-            )}
-            {/* Full government ID numbers: administrators and HR only. */}
-            <Can roles={[...DISCIPLINE_ROLES]}>
+          hasRole(...DISCIPLINE_ROLES) && (
+            // Two equal columns on phones; a row of buttons from `sm` up.
+            <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-wrap">
+              <Button
+                variant="secondary"
+                leftIcon={<Pencil className="h-4 w-4" />}
+                onClick={() => setEditOpen(true)}
+              >
+                <span className="sm:hidden">Edit</span>
+                <span className="hidden sm:inline">Edit information</span>
+              </Button>
+              {/* Full government ID numbers: administrators and HR only. */}
               <Button
                 variant="secondary"
                 leftIcon={<FileDown className="h-4 w-4" />}
@@ -189,20 +301,41 @@ export default function PersonnelDetailPage() {
               >
                 Export PDS
               </Button>
-            </Can>
-            {canRehire && (
-              <Can roles={[...DISCIPLINE_ROLES]}>
+              {canRehire && (
                 <Button
+                  className="col-span-2"
                   leftIcon={<UserCheck className="h-4 w-4" />}
                   onClick={() => setAction('rehire')}
                 >
                   Re-hire
                 </Button>
-              </Can>
-            )}
-          </>
+              )}
+            </div>
+          )
         }
       />
+
+      {/* Phones: call or email in one tap, without scrolling to the sidebar. */}
+      {(p.phone || p.email) && (
+        <div className="mb-4 grid grid-cols-2 gap-2 lg:hidden">
+          {p.phone ? (
+            <a href={`tel:${p.phone}`} className={QUICK_LINK}>
+              <Phone className="h-4 w-4 shrink-0" aria-hidden="true" />
+              <span className="truncate">Call</span>
+            </a>
+          ) : (
+            <span />
+          )}
+          {p.email ? (
+            <a href={`mailto:${p.email}`} className={QUICK_LINK}>
+              <Mail className="h-4 w-4 shrink-0" aria-hidden="true" />
+              <span className="truncate">Email</span>
+            </a>
+          ) : (
+            <span />
+          )}
+        </div>
+      )}
 
       {p.is_blocklisted && (
         <div
@@ -211,10 +344,10 @@ export default function PersonnelDetailPage() {
         >
           <AlertOctagon className="mt-0.5 h-5 w-5 shrink-0 text-danger" aria-hidden="true" />
           <div className="min-w-0">
-            <p className="text-sm font-semibold text-[var(--app-text)]">
+            <p className="text-sm font-semibold break-words text-[var(--app-text)]">
               Blocklisted — removed from the company effective {formatDate(p.blocklisted_on)}
             </p>
-            <p className="mt-0.5 text-sm whitespace-pre-line text-[var(--app-text-muted)]">
+            <p className="mt-0.5 text-sm break-words whitespace-pre-line text-[var(--app-text-muted)]">
               {p.blocklist_reason}
             </p>
             <p className="mt-1 text-xs text-[var(--app-text-subtle)]">
@@ -224,77 +357,94 @@ export default function PersonnelDetailPage() {
         </div>
       )}
 
-      <div className="grid gap-6 lg:grid-cols-3">
-        <div className="space-y-6 lg:col-span-2">
+      {canDiscipline && (
+        <details className="group mb-4 rounded-[var(--radius-card)] border border-[var(--app-border)] bg-[var(--app-surface)] shadow-[var(--shadow-card)] lg:hidden">
+          <summary className="flex cursor-pointer list-none items-center gap-2 px-4 py-3 text-sm font-semibold text-[var(--app-text)] [&::-webkit-details-marker]:hidden">
+            <ShieldAlert className="h-4 w-4 text-brand-500" aria-hidden="true" />
+            Status &amp; disciplinary actions
+            <ChevronDown
+              className="ml-auto h-4 w-4 text-[var(--app-text-subtle)] transition-transform group-open:rotate-180"
+              aria-hidden="true"
+            />
+          </summary>
+          <div className="grid gap-2 border-t border-[var(--app-border)] p-4 sm:grid-cols-2">
+            {disciplineButtons}
+          </div>
+        </details>
+      )}
+
+      <div className="grid gap-4 sm:gap-6 lg:grid-cols-3">
+        <div className="min-w-0 space-y-4 sm:space-y-6 lg:col-span-2">
           <Card padded={false}>
             <CardHeader title="Employment" />
-            <dl className="grid gap-x-6 p-5 sm:grid-cols-2">
-              {(
+            <InfoList
+              items={[
+                ['Employee number', p.employee_no],
+                ['Status', statusMeta?.label ?? '—'],
                 [
-                  ['Employee number', p.employee_no],
-                  [
-                    'Facility',
-                    currentFacility
-                      ? `${currentFacility.branch_name ?? 'Facility'} · ${humanize(currentFacility.shift)} shift${
-                          currentFacility.status === 'pending'
-                            ? ` (starts ${formatDate(currentFacility.start_date)})`
-                            : ''
-                        }`
-                      : 'Not assigned',
-                  ],
-                  ['Date hired', formatDate(p.date_hired)],
-                  ['Status', statusMeta?.label ?? '—'],
-                  ['Status effective', formatDate(p.status_effective_date)],
-                  ...(rehires.length > 0
-                    ? ([
-                        [
-                          'Re-hired',
-                          `${formatDate(rehires[0]!.effective_date)}${
-                            rehires.length > 1 ? ` (${rehires.length} times)` : ''
-                          }`,
-                        ],
-                      ] as [string, string][])
-                    : []),
-                  ['Date separated', formatDate(p.date_separated)],
-                ] as [string, string][]
-              ).map(([term, value]) => (
-                <div key={term} className="py-2.5">
-                  <dt className="text-xs font-medium tracking-wide text-[var(--app-text-subtle)] uppercase">
-                    {term}
-                  </dt>
-                  <dd className="mt-0.5 text-sm text-[var(--app-text)]">{value}</dd>
-                </div>
-              ))}
-            </dl>
+                  'Facility',
+                  currentFacility
+                    ? `${currentFacility.branch_name ?? 'Facility'} · ${humanize(currentFacility.shift)} shift${
+                        currentFacility.status === 'pending'
+                          ? ` (starts ${formatDate(currentFacility.start_date)})`
+                          : ''
+                      }`
+                    : 'Not assigned',
+                ],
+                ['Date hired', formatDate(p.date_hired)],
+                ['Status effective', formatDate(p.status_effective_date)],
+                ['Date applied', formatDate(application.data?.created_at)],
+                [
+                  'Position applied',
+                  application.data ? positionLookup.name(application.data.position_id) : '—',
+                ],
+                ...(rehires.length > 0
+                  ? ([
+                      [
+                        'Re-hired',
+                        `${formatDate(rehires[0]!.effective_date)}${
+                          rehires.length > 1 ? ` (${rehires.length} times)` : ''
+                        }`,
+                      ],
+                    ] as [string, string][])
+                  : []),
+                ['Date separated', formatDate(p.date_separated)],
+              ]}
+            />
           </Card>
 
           <Card padded={false}>
             <CardHeader title="Personal and statutory details" />
-            <dl className="grid gap-x-6 p-5 sm:grid-cols-2">
-              {(
-                [
-                  ['Date of birth', formatDate(p.birth_date)],
-                  ['Sex', humanize(p.sex)],
-                  ['Address', p.address ?? '—'],
-                  ['SSS', maskId(p.sss_no)],
-                  ['PhilHealth', maskId(p.philhealth_no)],
-                  ['Pag-IBIG', maskId(p.pagibig_no)],
-                  ['TIN', maskId(p.tin_no)],
-                  ['Security licence', p.security_license_no ?? '—'],
-                  ['Licence expiry', formatDate(p.security_license_expiry)],
-                  ['Emergency contact', p.emergency_contact_name ?? '—'],
-                  ['Emergency phone', p.emergency_contact_phone ?? '—'],
-                ] as [string, string][]
-              ).map(([term, value]) => (
-                <div key={term} className="py-2.5">
-                  <dt className="text-xs font-medium tracking-wide text-[var(--app-text-subtle)] uppercase">
-                    {term}
-                  </dt>
-                  <dd className="mt-0.5 text-sm text-[var(--app-text)]">{value}</dd>
-                </div>
-              ))}
-            </dl>
+            <InfoList
+              items={[
+                ['Date of birth', formatDate(p.birth_date)],
+                ['Sex', humanize(p.sex)],
+                ['Civil status', humanize(p.civil_status)],
+                ['Height', p.height_cm ? `${p.height_cm} cm (${formatFeetInches(p.height_cm)})` : '—'],
+                ['Weight', p.weight_kg ? `${p.weight_kg} kg (${formatPounds(p.weight_kg)})` : '—'],
+                ['Highest education', p.highest_education ?? '—'],
+                ['Latest tel / CP no.', p.phone ?? '—'],
+                ['Email', p.email ?? '—'],
+                ['Address', p.address ?? '—'],
+                ['SSS', maskId(p.sss_no)],
+                ['PhilHealth', maskId(p.philhealth_no)],
+                ['Pag-IBIG', maskId(p.pagibig_no)],
+                ['TIN', maskId(p.tin_no)],
+                ['Security licence', p.security_license_no ?? '—'],
+                ['Licence expiry', formatDate(p.security_license_expiry)],
+                ['Emergency contact', p.emergency_contact_name ?? '—'],
+                ['Emergency phone', p.emergency_contact_phone ?? '—'],
+              ]}
+            />
           </Card>
+
+          <PdsDetails
+            record={p}
+            description={
+              p.applicant_id ? 'Kept the same as the original application.' : undefined
+            }
+            onEdit={hasRole(...DISCIPLINE_ROLES) ? () => setPdsOpen(true) : undefined}
+          />
 
           <PersonnelActionLog personnelId={p.id} />
 
@@ -305,9 +455,9 @@ export default function PersonnelDetailPage() {
               icon={<MapPinned className="h-4 w-4" aria-hidden="true" />}
             />
             {deployments.isLoading ? (
-              <p className="p-5 text-sm text-[var(--app-text-muted)]">Loading…</p>
+              <p className="p-4 text-sm text-[var(--app-text-muted)] sm:p-5">Loading…</p>
             ) : (deployments.data?.length ?? 0) === 0 ? (
-              <p className="p-5 text-sm text-[var(--app-text-muted)]">
+              <p className="p-4 text-sm text-[var(--app-text-muted)] sm:p-5">
                 This person has never been deployed.
               </p>
             ) : (
@@ -315,9 +465,9 @@ export default function PersonnelDetailPage() {
                 {deployments.data!.map((d) => {
                   const meta = deploymentStatusMeta(d.status)
                   return (
-                    <li key={d.id} className="flex flex-wrap items-center gap-3 px-5 py-3.5">
+                    <li key={d.id} className="flex items-start gap-3 px-4 py-3.5 sm:px-5">
                       <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-medium text-[var(--app-text)]">
+                        <p className="text-sm font-medium break-words text-[var(--app-text)]">
                           {branchName(d.branch_id)}
                         </p>
                         <p className="text-xs text-[var(--app-text-subtle)]">
@@ -326,12 +476,12 @@ export default function PersonnelDetailPage() {
                           {d.daily_rate ? ` · ${formatCurrency(d.daily_rate)}/day` : ''}
                         </p>
                         {d.ended_reason && (
-                          <p className="mt-0.5 text-xs text-[var(--app-text-muted)]">
+                          <p className="mt-0.5 text-xs break-words text-[var(--app-text-muted)]">
                             {d.ended_reason}
                           </p>
                         )}
                       </div>
-                      <Badge tone={meta?.tone ?? 'neutral'} size="sm">
+                      <Badge tone={meta?.tone ?? 'neutral'} size="sm" className="shrink-0">
                         {meta?.label}
                       </Badge>
                     </li>
@@ -342,80 +492,18 @@ export default function PersonnelDetailPage() {
           </Card>
         </div>
 
-        <div className="space-y-6">
-          {!p.is_blocklisted && (
-            <Can roles={[...DISCIPLINE_ROLES]}>
-              <Card padded={false}>
-                <CardHeader
-                  title="Disciplinary and status actions"
-                  icon={<ShieldAlert className="h-4 w-4" aria-hidden="true" />}
-                />
-                <div className="flex flex-col gap-2 p-5">
-                  <Button
-                    variant="secondary"
-                    leftIcon={<AlertOctagon className="h-4 w-4" />}
-                    onClick={() => setAction('violation')}
-                  >
-                    Record violation / offense
-                  </Button>
-                  {(p.employment_status === 'active' || p.employment_status === 'on_leave') && (
-                    <Button
-                      variant="secondary"
-                      leftIcon={<PauseCircle className="h-4 w-4" />}
-                      onClick={() => setAction('suspend')}
-                    >
-                      Suspend
-                    </Button>
-                  )}
-                  {p.employment_status === 'suspended' && (
-                    <Button
-                      variant="secondary"
-                      leftIcon={<PlayCircle className="h-4 w-4" />}
-                      onClick={() => setAction('lift')}
-                    >
-                      Lift suspension
-                    </Button>
-                  )}
-                  {employed && (
-                    <>
-                      <Button
-                        variant="secondary"
-                        leftIcon={<UserMinus className="h-4 w-4" />}
-                        onClick={() => setAction('resign')}
-                      >
-                        Record resignation
-                      </Button>
-                      <Button
-                        variant="secondary"
-                        leftIcon={<UserX className="h-4 w-4" />}
-                        onClick={() => setAction('terminate')}
-                      >
-                        Terminate
-                      </Button>
-                    </>
-                  )}
-                  {canRehire && (
-                    <Button
-                      variant="secondary"
-                      leftIcon={<UserCheck className="h-4 w-4" />}
-                      onClick={() => setAction('rehire')}
-                    >
-                      Re-hire
-                    </Button>
-                  )}
-                  <Button
-                    variant="danger"
-                    leftIcon={<Ban className="h-4 w-4" />}
-                    onClick={() => setAction('blocklist')}
-                  >
-                    Blocklist (remove from company)
-                  </Button>
-                </div>
-              </Card>
-            </Can>
+        <div className="min-w-0 space-y-4 sm:space-y-6">
+          {canDiscipline && (
+            <Card padded={false} className="hidden lg:block">
+              <CardHeader
+                title="Disciplinary and status actions"
+                icon={<ShieldAlert className="h-4 w-4" aria-hidden="true" />}
+              />
+              <div className="flex flex-col gap-2 p-5">{disciplineButtons}</div>
+            </Card>
           )}
 
-          <Card padded={false}>
+          <Card padded={false} className="hidden lg:block">
             <CardHeader title="Contact" />
             <div className="space-y-2 p-5">
               {p.email ? (
@@ -444,9 +532,11 @@ export default function PersonnelDetailPage() {
           </Card>
 
           {p.applicant_id && (
-            <Card>
+            <Card className="p-4 sm:p-5">
               <p className="text-sm text-[var(--app-text-muted)]">
-                Onboarded from a recruitment application.
+                Onboarded from a recruitment application. Personal details,
+                address, government numbers and licence are kept the same on
+                both records — editing either one updates the other.
               </p>
               <Link
                 to={`/admin/applicants/${p.applicant_id}`}
@@ -459,6 +549,32 @@ export default function PersonnelDetailPage() {
         </div>
       </div>
 
+      <EditPersonnelDialog
+        open={editOpen}
+        person={p}
+        onClose={() => setEditOpen(false)}
+        onResume={() => setEditOpen(true)}
+      />
+
+      <EditPdsDialog
+        open={pdsOpen}
+        draftId="pds.personnel"
+        recordId={p.id}
+        record={p}
+        description={
+          p.applicant_id
+            ? `${p.employee_no} · Changes are also saved to the original application.`
+            : p.employee_no
+        }
+        onSave={(patch) => updatePersonnel(p.id, patch)}
+        onSaved={() => {
+          void qc.invalidateQueries({ queryKey: queryKeys.personnel.all })
+          if (p.applicant_id) void qc.invalidateQueries({ queryKey: queryKeys.applicants.all })
+        }}
+        onClose={() => setPdsOpen(false)}
+        onResume={() => setPdsOpen(true)}
+      />
+
       <PersonnelActionDialog
         key={action ?? 'closed'}
         kind={action}
@@ -467,5 +583,35 @@ export default function PersonnelDetailPage() {
         onClose={() => setAction(null)}
       />
     </>
+  )
+}
+
+/* -------------------------------------------------------------------------- */
+
+const QUICK_LINK =
+  'inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-[var(--app-border)] bg-[var(--app-surface)] px-3 text-sm font-medium text-brand-600 shadow-[var(--shadow-card)] active:bg-[var(--app-bg)]'
+
+/**
+ * Label / value pairs. Phones: one compact row each, label left and value
+ * right, so a long card is a quick scan rather than a tall stack. From `sm`
+ * up: two columns, label above value.
+ */
+function InfoList({ items }: { items: [string, ReactNode][] }) {
+  return (
+    <dl className="divide-y divide-[var(--app-border)] px-4 sm:grid sm:grid-cols-2 sm:gap-x-6 sm:divide-y-0 sm:p-5">
+      {items.map(([term, value]) => (
+        <div
+          key={term}
+          className="grid grid-cols-[minmax(0,2fr)_minmax(0,3fr)] items-baseline gap-3 py-2.5 sm:block"
+        >
+          <dt className="text-xs font-medium tracking-wide text-[var(--app-text-subtle)] uppercase">
+            {term}
+          </dt>
+          <dd className="text-right text-sm break-words text-[var(--app-text)] sm:mt-0.5 sm:text-left">
+            {value}
+          </dd>
+        </div>
+      ))}
+    </dl>
   )
 }

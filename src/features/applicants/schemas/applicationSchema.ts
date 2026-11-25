@@ -1,4 +1,9 @@
 import { z } from 'zod'
+import {
+  EMPTY_REFERENCE,
+  pdsApplySchema,
+  pdsDefaults,
+} from '@/features/pds/pdsSchema'
 
 /**
  * Public application form validation.
@@ -11,8 +16,9 @@ import { z } from 'zod'
  */
 
 /**
- * Youngest age at which anyone may apply. Mirrors `applicants_age_chk` and
- * `positions_min_age_chk` (migration 0026) — change all three together.
+ * Youngest age at which anyone may apply. Mirrors the `enforce_min_age`
+ * trigger on applicants (0032, formerly `applicants_age_chk`) and
+ * `positions_min_age_chk` (0026) — change all three together.
  */
 export const MIN_APPLICANT_AGE = 21
 
@@ -109,6 +115,8 @@ export const applicationSchema = personalStepSchema
   .merge(addressStepSchema)
   .merge(positionStepSchema)
   .merge(credentialsStepSchema)
+  // The rest of the agency's Personal Data Sheet (0032).
+  .merge(pdsApplySchema)
   .merge(consentStepSchema)
   // A licensed applicant must supply the licence number the claim rests on.
   .refine(
@@ -120,6 +128,34 @@ export const applicationSchema = personalStepSchema
   )
 
 export type ApplicationFormValues = z.infer<typeof applicationSchema>
+
+/**
+ * Staff correcting an application after it was submitted: every applicant
+ * field, no consent step. The phone check is widened to what the database
+ * itself accepts (`applicants_phone_format_chk`), so a record that predates the
+ * stricter form rule can still be saved. City is optional: a hired guard's
+ * address rewritten on the roster is kept as one line in address_line (0031).
+ */
+export const applicantEditSchema = personalStepSchema
+  .extend({
+    phone: z
+      .string()
+      .trim()
+      .min(1, 'Mobile number is required')
+      .regex(/^[0-9+()\s-]{7,20}$/, 'Enter a valid mobile number, e.g. 09171234567'),
+  })
+  .merge(addressStepSchema.extend({ city_municipality: z.string().trim().max(100) }))
+  .merge(positionStepSchema)
+  .merge(credentialsStepSchema)
+  .refine(
+    (values) => !values.is_licensed || Boolean(values.security_license_no?.trim()),
+    {
+      message: 'Enter the licence number, or untick "Holds a security licence"',
+      path: ['security_license_no'],
+    },
+  )
+
+export type ApplicantEditValues = z.infer<typeof applicantEditSchema>
 
 export const applicationDefaults: ApplicationFormValues = {
   first_name: '',
@@ -156,6 +192,9 @@ export const applicationDefaults: ApplicationFormValues = {
   is_licensed: false,
   security_license_no: '',
   security_license_expiry: '',
+  ...pdsDefaults,
+  // One blank row to start: at least one reference is required.
+  character_references: [{ ...EMPTY_REFERENCE }],
   consent_data: true,
   consent_accuracy: true,
 }
@@ -163,11 +202,12 @@ export const applicationDefaults: ApplicationFormValues = {
 /**
  * Maps form values onto the payload `submit_application` expects.
  *
- * Only applicant-supplied fields appear here. The pipeline columns — status,
+ * The core application only — the Personal Data Sheet part is added by
+ * `pdsToPatch` (features/pds). Only applicant-supplied fields appear here. The pipeline columns — status,
  * reviewed_by, rating, notes — are set by the function itself and are not read
  * from this payload, so there is nothing for a crafted request to override.
  */
-export function toApplicantInsert(values: ApplicationFormValues) {
+export function toApplicantInsert(values: ApplicantEditValues) {
   return {
     first_name: values.first_name.trim(),
     middle_name: toNullable(values.middle_name),
@@ -182,7 +222,7 @@ export function toApplicantInsert(values: ApplicationFormValues) {
     weight_kg: values.weight_kg ? Number(values.weight_kg) : null,
     address_line: toNullable(values.address_line),
     barangay: toNullable(values.barangay),
-    city_municipality: values.city_municipality.trim(),
+    city_municipality: toNullable(values.city_municipality),
     province: toNullable(values.province),
     region: toNullable(values.region),
     postal_code: toNullable(values.postal_code),

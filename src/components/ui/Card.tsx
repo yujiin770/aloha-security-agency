@@ -41,7 +41,7 @@ export function CardHeader({
   return (
     <div
       className={cn(
-        'flex flex-wrap items-start justify-between gap-3 border-b border-[var(--app-border)] px-5 py-4',
+        'flex flex-wrap items-start justify-between gap-3 border-b border-[var(--app-border)] px-4 py-3.5 sm:px-5 sm:py-4',
         className,
       )}
     >
