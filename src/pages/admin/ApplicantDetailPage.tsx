@@ -1,14 +1,10 @@
 import { useCallback, useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Link, Navigate, useNavigate, useParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   Archive,
   ArrowLeft,
-  BadgeCheck,
   CalendarClock,
-  Eye,
-  FileImage,
-  FileText,
   Mail,
   Pencil,
   Phone,
@@ -24,8 +20,7 @@ import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Checkbox, Field, Input, Select, Textarea } from '@/components/ui/Field'
 import { Modal } from '@/components/ui/Modal'
-import { ErrorState, LoadingState, Skeleton } from '@/components/ui/Feedback'
-import { ImageViewer } from '@/components/ui/ImageViewer'
+import { ErrorState, LoadingState } from '@/components/ui/Feedback'
 import { useToast } from '@/components/ui/Toast'
 import { Can } from '@/app/guards'
 import { queryKeys } from '@/lib/queryKeys'
@@ -34,23 +29,18 @@ import { useAuth } from '@/contexts/AuthContext'
 import {
   getApplicant,
   getApplicantHistory,
-  getDocumentUrl,
   hireApplicant,
-  listApplicantDocuments,
   notifyApplicantOfStatus,
-  updateApplicant,
   updateApplicantStatus,
-  verifyDocument,
 } from '@/features/applicants/api/applicantsApi'
 import type { NotifyOutcome } from '@/features/applicants/api/applicantsApi'
 import { EditApplicantDialog } from '@/features/applicants/components/EditApplicantDialog'
+import { ApplicantDocumentsCard } from '@/features/applicants/components/ApplicantDocumentsCard'
 import { PdsDetails } from '@/features/pds/PdsDetails'
 import { getPersonnelForApplicant } from '@/features/personnel/api/personnelApi'
-import { EditPdsDialog } from '@/features/pds/EditPdsDialog'
 import {
   APPLICANT_TRANSITIONS,
   applicantStatusMeta,
-  documentTypeMeta,
   employmentStatusMeta,
   sortByPipeline,
   ADMIN_ROLES,
@@ -64,7 +54,6 @@ import {
   formatCurrency,
   formatDate,
   formatDateTime,
-  formatFileSize,
   fullName,
   humanize,
   maskId,
@@ -72,7 +61,7 @@ import {
 import { formatFeetInches, formatPounds } from '@/utils/units'
 import { useStateDraft } from '@/hooks/useStateDraft'
 import { DraftNotice } from '@/components/ui/DraftNotice'
-import type { ApplicantDocumentRow, ApplicantStatus } from '@/types/database.types'
+import type { ApplicantStatus } from '@/types/database.types'
 
 /**
  * How each pipeline move is offered. The verbs say what the click does, and the
@@ -90,9 +79,6 @@ const MOVE_ACTIONS: Record<
   archived: { label: 'Archive Applicant', icon: Archive, variant: 'ghost' },
 }
 
-const isImage = (doc: ApplicantDocumentRow) =>
-  doc.mime_type?.startsWith('image/') ?? /\.(jpe?g|png|webp|gif)$/i.test(doc.file_name)
-
 /**
  * Statuses `buildStatusEmail` produces a template for. Kept in step with it —
  * offering the checkbox for a status that sends nothing would be a lie.
@@ -104,7 +90,7 @@ export default function ApplicantDetailPage() {
   const navigate = useNavigate()
   const toast = useToast()
   const qc = useQueryClient()
-  const { user, hasRole } = useAuth()
+  const { hasPermission } = useAuth()
 
   const [statusTarget, setStatusTarget] = useState<ApplicantStatus | null>(null)
   const [rejectionReason, setRejectionReason] = useState('')
@@ -113,7 +99,6 @@ export default function ApplicantDetailPage() {
   const [notify, setNotify] = useState(true)
   const [hireOpen, setHireOpen] = useState(false)
   const [editOpen, setEditOpen] = useState(false)
-  const [pdsOpen, setPdsOpen] = useState(false)
   // The facility the new hire is deployed to (0028); starts on their preferred one.
   const [facilityId, setFacilityId] = useState('')
   const [shift, setShift] = useState<ShiftType>('day')
@@ -138,12 +123,6 @@ export default function ApplicantDetailPage() {
     queryFn: () => getPersonnelForApplicant(id),
     enabled: Boolean(id) && applicant.data?.status === 'hired',
     retry: false,
-  })
-
-  const documents = useQuery({
-    queryKey: queryKeys.applicants.documents(id),
-    queryFn: () => listApplicantDocuments(id),
-    enabled: Boolean(id),
   })
 
   const history = useQuery({
@@ -232,15 +211,6 @@ export default function ApplicantDetailPage() {
     onError: (error) => toast.error('Could not onboard applicant', errorMessage(error)),
   })
 
-  const verify = useMutation({
-    mutationFn: (documentId: string) => verifyDocument(documentId, user!.id),
-    onSuccess: () => {
-      toast.success('Document verified')
-      void qc.invalidateQueries({ queryKey: queryKeys.applicants.documents(id) })
-    },
-    onError: (error) => toast.error('Could not verify document', errorMessage(error)),
-  })
-
   // Memoised so the status dialog's `onClose` keeps a stable identity across
   // the re-render every keystroke in the note field causes.
   const closeStatusDialog = useCallback(() => {
@@ -298,40 +268,19 @@ export default function ApplicantDetailPage() {
     },
   })
 
-  // Images preview in place; anything else (PDFs) opens in a new tab, where
-  // the browser's own viewer does a better job than we could.
-  const [preview, setPreview] = useState<{ doc: ApplicantDocumentRow; url: string | null } | null>(
-    null,
-  )
-
-  async function loadPreview(doc: ApplicantDocumentRow) {
-    setPreview({ doc, url: null })
-    try {
-      // Signed links expire after a minute, so a retry always asks for a new one.
-      const url = await getDocumentUrl(doc)
-      setPreview((current) => (current?.doc.id === doc.id ? { doc, url } : current))
-    } catch (error) {
-      setPreview(null)
-      toast.error('Could not load preview', errorMessage(error))
-    }
-  }
-
-  async function openDocument(docId: string) {
-    const doc = documents.data?.find((d) => d.id === docId)
-    if (!doc) return
-    if (isImage(doc)) {
-      void loadPreview(doc)
-      return
-    }
-    try {
-      const url = await getDocumentUrl(doc)
-      window.open(url, '_blank', 'noopener,noreferrer')
-    } catch (error) {
-      toast.error('Could not open document', errorMessage(error))
-    }
-  }
-
   if (applicant.isLoading) return <LoadingState label="Loading applicant…" />
+
+  // A hired applicant and their personnel record are one person with one set of
+  // details, so they get one page: the personnel record, which also shows
+  // everything from the application. Users without the Personnel page (or if
+  // the record cannot be read) stay here.
+  const goesToPersonnel = applicant.data?.status === 'hired' && hasPermission('pages.personnel')
+  if (goesToPersonnel && personnelRecord.isLoading) {
+    return <LoadingState label="Opening personnel record…" />
+  }
+  if (goesToPersonnel && personnelRecord.data) {
+    return <Navigate to={`/admin/personnel/${personnelRecord.data.id}`} replace />
+  }
 
   if (applicant.isError || !applicant.data) {
     return (
@@ -558,93 +507,10 @@ export default function ApplicantDetailPage() {
           {/* Personal Data Sheet (0032) ----------------------------------- */}
           <PdsDetails
             record={a}
-            onEdit={
-              hasRole(...ADMIN_ROLES, 'hr_staff', 'recruitment_officer')
-                ? () => setPdsOpen(true)
-                : undefined
-            }
           />
 
           {/* Documents ---------------------------------------------------- */}
-          <Card padded={false}>
-            <CardHeader
-              title="Uploaded documents"
-              description={`${documents.data?.length ?? 0} uploaded`}
-            />
-            {documents.isLoading ? (
-              <div className="space-y-3 p-5">
-                {Array.from({ length: 3 }).map((_, i) => (
-                  <Skeleton key={i} className="h-11" />
-                ))}
-              </div>
-            ) : documents.isError ? (
-              <ErrorState
-                message={errorMessage(documents.error)}
-                onRetry={() => void documents.refetch()}
-                className="py-8"
-              />
-            ) : (documents.data?.length ?? 0) === 0 ? (
-              <p className="p-5 text-sm text-[var(--app-text-muted)]">
-                No documents were uploaded with this application.
-              </p>
-            ) : (
-              <ul className="divide-y divide-[var(--app-border)]">
-                {documents.data!.map((doc) => (
-                  <li
-                    key={doc.id}
-                    className="flex flex-wrap items-center gap-3 px-5 py-3"
-                  >
-                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[var(--app-bg)] text-[var(--app-text-subtle)]">
-                      {isImage(doc) ? (
-                        <FileImage className="h-4 w-4" aria-hidden="true" />
-                      ) : (
-                        <FileText className="h-4 w-4" aria-hidden="true" />
-                      )}
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium text-[var(--app-text)]">
-                        {documentTypeMeta(doc.document_type)?.label ??
-                          humanize(doc.document_type)}
-                      </p>
-                      <p className="truncate text-xs text-[var(--app-text-subtle)]">
-                        {doc.file_name} · {formatFileSize(doc.size_bytes)}
-                      </p>
-                    </div>
-
-                    {doc.verified_at ? (
-                      <Badge tone="success" size="sm">
-                        Verified
-                      </Badge>
-                    ) : (
-                      <Can roles={[...ADMIN_ROLES, 'hr_staff', 'recruitment_officer']}>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          leftIcon={<BadgeCheck className="h-3.5 w-3.5" />}
-                          onClick={() => verify.mutate(doc.id)}
-                          isLoading={verify.isPending && verify.variables === doc.id}
-                        >
-                          Verify
-                        </Button>
-                      </Can>
-                    )}
-
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      leftIcon={<Eye className="h-3.5 w-3.5" />}
-                      onClick={() => void openDocument(doc.id)}
-                    >
-                      {isImage(doc) ? 'Preview' : 'Open'}
-                    </Button>
-                  </li>
-                ))}
-              </ul>
-            )}
-            <p className="border-t border-[var(--app-border)] px-5 py-2.5 text-xs text-[var(--app-text-subtle)]">
-              Images preview here; other files open in a new tab. Links are signed and expire after 60 seconds.
-            </p>
-          </Card>
+          <ApplicantDocumentsCard applicantId={a.id} personName={fullName(a)} />
         </div>
 
         {/* Sidebar -------------------------------------------------------- */}
@@ -756,35 +622,6 @@ export default function ApplicantDetailPage() {
         onResume={() => setEditOpen(true)}
       />
 
-      <EditPdsDialog
-        open={pdsOpen}
-        draftId="pds.applicant"
-        recordId={a.id}
-        record={a}
-        description={
-          a.status === 'hired'
-            ? `${a.reference_no} · Hired: changes are also saved to their personnel roster record.`
-            : a.reference_no
-        }
-        onSave={(patch) => updateApplicant(a.id, patch)}
-        onSaved={() => {
-          void qc.invalidateQueries({ queryKey: queryKeys.applicants.all })
-          if (a.status === 'hired') void qc.invalidateQueries({ queryKey: queryKeys.personnel.all })
-        }}
-        onClose={() => setPdsOpen(false)}
-        onResume={() => setPdsOpen(true)}
-      />
-
-      {/* Document preview ------------------------------------------------- */}
-      <ImageViewer
-        open={preview !== null}
-        onClose={() => setPreview(null)}
-        src={preview?.url ?? null}
-        alt={preview ? `${documentTypeMeta(preview.doc.document_type)?.label ?? 'Document'} for ${fullName(a)}` : ''}
-        title={preview ? (documentTypeMeta(preview.doc.document_type)?.label ?? humanize(preview.doc.document_type)) : undefined}
-        subtitle={preview ? `${preview.doc.file_name} · ${fullName(a)}` : undefined}
-        onRetry={preview ? () => void loadPreview(preview.doc) : undefined}
-      />
 
       {/* Status change dialog --------------------------------------------- */}
       <Modal

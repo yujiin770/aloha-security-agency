@@ -15,6 +15,9 @@ import { listBranchOptions } from '@/features/branches/api/branchesApi'
 import { CIVIL_STATUSES } from '@/utils/constants'
 import type { ApplicantRow } from '@/types/database.types'
 import { updateApplicant } from '../api/applicantsApi'
+import { PdsFormSections } from '@/features/pds/PdsFormSections'
+import { ALL_PDS_SECTIONS, pdsToPatch, type PdsFormValues } from '@/features/pds/pdsSchema'
+import { usePdsSubform } from '@/features/pds/usePdsSubform'
 import {
   applicantEditSchema,
   toApplicantInsert,
@@ -120,11 +123,22 @@ export function EditApplicantDialog({
     onResume: () => onResume?.(),
   })
 
+  const pds = usePdsSubform({
+    record: applicant,
+    open,
+    draftId: 'pds.applicant',
+    recordId: applicant.id,
+    onResume,
+  })
+  const dirty = form.formState.isDirty || pds.form.formState.isDirty
+
   const save = useMutation({
-    mutationFn: (values: ApplicantEditValues) => {
+    mutationFn: ({ values, pdsValues }: { values: ApplicantEditValues; pdsValues: PdsFormValues }) => {
       const patch = toApplicantInsert(values)
       return updateApplicant(applicant.id, {
         ...patch,
+        // The Personal Data Sheet is part of the same record and the same save.
+        ...pdsToPatch(pdsValues),
         // Unticking the licence clears what the claim rested on.
         security_license_no: values.is_licensed ? patch.security_license_no : null,
         security_license_expiry: values.is_licensed ? patch.security_license_expiry : null,
@@ -140,6 +154,22 @@ export function EditApplicantDialog({
     },
     onError: (error) => toast.error('Could not save changes', errorMessage(error)),
   })
+
+  // Both halves are checked before anything is saved, so every invalid field
+  // is highlighted at once, wherever it is in the dialog.
+  async function submit() {
+    const [mainOk, pdsOk] = await Promise.all([form.trigger(), pds.form.trigger()])
+    if (!mainOk || !pdsOk) {
+      toast.error('Check the highlighted fields', 'Some details need correcting before saving.')
+      return
+    }
+    save.mutate({ values: form.getValues(), pdsValues: pds.form.getValues() })
+  }
+
+  function discardDrafts() {
+    draft.discard()
+    pds.draft.discard()
+  }
 
   const positionOptions = (positions.data ?? []).map((p) => ({
     value: p.id,
@@ -164,8 +194,8 @@ export function EditApplicantDialog({
     <Modal
       open={open}
       onClose={onClose}
-      confirmClose={form.formState.isDirty}
-      size="lg"
+      confirmClose={dirty}
+      size="xl"
       title="Edit applicant information"
       description={
         applicant.status === 'hired'
@@ -178,16 +208,19 @@ export function EditApplicantDialog({
             Cancel
           </Button>
           <Button
-            onClick={form.handleSubmit((values) => save.mutate(values))}
+            onClick={() => void submit()}
             isLoading={save.isPending}
-            disabled={!form.formState.isDirty}
+            disabled={!dirty}
           >
             Save changes
           </Button>
         </>
       }
     >
-      <DraftNotice restoredAt={draft.restoredAt} onDiscard={draft.discard} />
+      <DraftNotice
+        restoredAt={draft.restoredAt ?? pds.draft.restoredAt}
+        onDiscard={discardDrafts}
+      />
       <form className="space-y-6" noValidate onSubmit={(e) => e.preventDefault()}>
         <fieldset className="space-y-4">
           <legend className={LEGEND}>Personal information</legend>
@@ -349,6 +382,11 @@ export function EditApplicantDialog({
               </>
             )}
           </div>
+        </fieldset>
+
+        <fieldset className="border-t border-[var(--app-border)] pt-5">
+          <legend className={LEGEND}>Personal Data Sheet</legend>
+          <PdsFormSections form={pds.form} sections={ALL_PDS_SECTIONS} />
         </fieldset>
       </form>
     </Modal>

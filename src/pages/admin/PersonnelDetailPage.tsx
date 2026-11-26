@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import {
   AlertOctagon,
   ArrowLeft,
@@ -30,13 +30,12 @@ import {
   getPersonnel,
   getPersonnelDeployments,
   listPersonnelActions,
-  updatePersonnel,
 } from '@/features/personnel/api/personnelApi'
 import { getApplicant } from '@/features/applicants/api/applicantsApi'
+import { ApplicantDocumentsCard } from '@/features/applicants/components/ApplicantDocumentsCard'
 import { usePositionLookup } from '@/features/config/hooks/useConfig'
 import { useAuth } from '@/contexts/AuthContext'
 import { PdsDetails } from '@/features/pds/PdsDetails'
-import { EditPdsDialog } from '@/features/pds/EditPdsDialog'
 import {
   PersonnelActionDialog,
   type PersonnelActionKind,
@@ -54,6 +53,7 @@ import {
 import {
   formatCurrency,
   formatDate,
+  formatDateTime,
   fullName,
   humanize,
   maskId,
@@ -68,8 +68,6 @@ export default function PersonnelDetailPage() {
   const [action, setAction] = useState<PersonnelActionKind | null>(null)
   const [exporting, setExporting] = useState(false)
   const [editOpen, setEditOpen] = useState(false)
-  const [pdsOpen, setPdsOpen] = useState(false)
-  const qc = useQueryClient()
   const { hasRole } = useAuth()
   const positionLookup = usePositionLookup()
   const toast = useToast()
@@ -88,8 +86,10 @@ export default function PersonnelDetailPage() {
   })
   const rehires = (actions.data ?? []).filter((a) => a.action_type === 'rehire')
 
-  // The application this guard was hired from: date applied and position
-  // applied for live there. A role without access to applicants just sees '—'.
+  // The application this guard was hired from. It is the same person's record,
+  // so its details (clearances, application, documents) are shown here too
+  // rather than on a separate page. A role without access to applicants simply
+  // does not get those sections.
   const applicantId = person.data?.applicant_id ?? ''
   const application = useQuery({
     queryKey: queryKeys.applicants.detail(applicantId),
@@ -145,6 +145,7 @@ export default function PersonnelDetailPage() {
   }
 
   const p = person.data
+  const app = p.applicant_id ? (application.data ?? null) : null
   const statusMeta = employmentStatusMeta(p.employment_status)
   const employed = ['active', 'on_leave', 'suspended'].includes(p.employment_status)
   const canRehire = p.employment_status === 'resigned' && !p.is_blocklisted
@@ -393,11 +394,6 @@ export default function PersonnelDetailPage() {
                 ],
                 ['Date hired', formatDate(p.date_hired)],
                 ['Status effective', formatDate(p.status_effective_date)],
-                ['Date applied', formatDate(application.data?.created_at)],
-                [
-                  'Position applied',
-                  application.data ? positionLookup.name(application.data.position_id) : '—',
-                ],
                 ...(rehires.length > 0
                   ? ([
                       [
@@ -432,19 +428,52 @@ export default function PersonnelDetailPage() {
                 ['TIN', maskId(p.tin_no)],
                 ['Security licence', p.security_license_no ?? '—'],
                 ['Licence expiry', formatDate(p.security_license_expiry)],
+                ...(app
+                  ? ([
+                      ['NBI clearance', app.nbi_clearance_no ?? '—'],
+                      ['NBI expiry', formatDate(app.nbi_clearance_expiry)],
+                      ['Police clearance', app.police_clearance_no ?? '—'],
+                    ] as [string, string][])
+                  : []),
                 ['Emergency contact', p.emergency_contact_name ?? '—'],
                 ['Emergency phone', p.emergency_contact_phone ?? '—'],
               ]}
             />
           </Card>
 
+          {app && (
+            <Card padded={false}>
+              <CardHeader title="Application" />
+              <InfoList
+                items={[
+                  ['Reference no.', <span className="font-mono">{app.reference_no}</span>],
+                  ['Position applied', positionLookup.name(app.position_id)],
+                  ['Date applied', formatDate(app.created_at)],
+                  ['Experience', `${app.years_experience} year(s)`],
+                  ['Expected salary', formatCurrency(app.expected_salary)],
+                  ['Available from', formatDate(app.availability_date)],
+                  ['Heard about us via', app.source ?? '—'],
+                  ['Interview', app.interview_at ? formatDateTime(app.interview_at) : '—'],
+                ]}
+              />
+              {app.interview_notes && (
+                <div className="border-t border-[var(--app-border)] px-4 py-3 sm:px-5">
+                  <p className="text-xs font-medium tracking-wide text-[var(--app-text-subtle)] uppercase">
+                    Interview notes
+                  </p>
+                  <p className="mt-1 text-sm whitespace-pre-wrap text-[var(--app-text-muted)]">
+                    {app.interview_notes}
+                  </p>
+                </div>
+              )}
+            </Card>
+          )}
+
           <PdsDetails
             record={p}
-            description={
-              p.applicant_id ? 'Kept the same as the original application.' : undefined
-            }
-            onEdit={hasRole(...DISCIPLINE_ROLES) ? () => setPdsOpen(true) : undefined}
           />
+
+          {app && <ApplicantDocumentsCard applicantId={app.id} personName={fullName(p)} />}
 
           <PersonnelActionLog personnelId={p.id} />
 
@@ -531,49 +560,17 @@ export default function PersonnelDetailPage() {
             </div>
           </Card>
 
-          {p.applicant_id && (
-            <Card className="p-4 sm:p-5">
-              <p className="text-sm text-[var(--app-text-muted)]">
-                Onboarded from a recruitment application. Personal details,
-                address, government numbers and licence are kept the same on
-                both records — editing either one updates the other.
-              </p>
-              <Link
-                to={`/admin/applicants/${p.applicant_id}`}
-                className="mt-2 inline-block text-sm font-medium text-brand-600 hover:underline"
-              >
-                View original application
-              </Link>
-            </Card>
-          )}
         </div>
       </div>
 
       <EditPersonnelDialog
         open={editOpen}
         person={p}
+        application={app}
         onClose={() => setEditOpen(false)}
         onResume={() => setEditOpen(true)}
       />
 
-      <EditPdsDialog
-        open={pdsOpen}
-        draftId="pds.personnel"
-        recordId={p.id}
-        record={p}
-        description={
-          p.applicant_id
-            ? `${p.employee_no} · Changes are also saved to the original application.`
-            : p.employee_no
-        }
-        onSave={(patch) => updatePersonnel(p.id, patch)}
-        onSaved={() => {
-          void qc.invalidateQueries({ queryKey: queryKeys.personnel.all })
-          if (p.applicant_id) void qc.invalidateQueries({ queryKey: queryKeys.applicants.all })
-        }}
-        onClose={() => setPdsOpen(false)}
-        onResume={() => setPdsOpen(true)}
-      />
 
       <PersonnelActionDialog
         key={action ?? 'closed'}

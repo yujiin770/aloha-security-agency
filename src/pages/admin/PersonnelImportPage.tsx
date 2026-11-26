@@ -404,10 +404,10 @@ export default function PersonnelImportPage() {
               </div>
 
               {sheets && sheets.length > 1 && (
-                <label className="flex items-center gap-2 text-sm text-[var(--app-text-muted)]">
+                <label className="flex w-full items-center gap-2 text-sm text-[var(--app-text-muted)] sm:w-auto">
                   Sheet
                   <select
-                    className="h-8 rounded-md border border-[var(--app-border)] bg-[var(--app-surface)] px-2 text-sm text-[var(--app-text)]"
+                    className="h-8 min-w-0 rounded-md border border-[var(--app-border)] bg-[var(--app-surface)] px-2 text-sm text-[var(--app-text)] max-sm:h-10 max-sm:flex-1"
                     value={sheetChoice}
                     disabled={importing}
                     onChange={(e) => {
@@ -434,7 +434,8 @@ export default function PersonnelImportPage() {
                 </label>
               )}
 
-              <div className="flex flex-wrap items-center gap-2">
+              {/* Phones: three equal chips on one row. */}
+              <div className="grid w-full grid-cols-3 gap-2 sm:flex sm:w-auto sm:flex-wrap sm:items-center">
                 <FilterChip active={filter === 'all'} onClick={() => { setFilter('all'); setPage(1) }}>
                   All {rows.length}
                 </FilterChip>
@@ -454,7 +455,7 @@ export default function PersonnelImportPage() {
                 </FilterChip>
               </div>
 
-              <label className="flex items-center gap-2 text-sm text-[var(--app-text-muted)]">
+              <label className="flex items-center gap-2 text-sm text-[var(--app-text-muted)] max-sm:py-1">
                 <input
                   type="checkbox"
                   className="h-4 w-4 accent-[var(--color-brand-500)]"
@@ -464,13 +465,22 @@ export default function PersonnelImportPage() {
                 Personal Data Sheet columns
               </label>
 
-              <div className="ml-auto flex flex-wrap items-center gap-2">
-                <Button variant="ghost" size="sm" onClick={clearAll} disabled={importing}>
+              {/* Phones: Clear and Add row side by side, Import full width
+                  below them; a row of buttons on the right from `sm` up. */}
+              <div className="grid w-full grid-cols-2 gap-2 sm:ml-auto sm:flex sm:w-auto sm:flex-wrap sm:items-center">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="max-sm:h-10 max-sm:border max-sm:border-[var(--app-border)] max-sm:text-sm"
+                  onClick={clearAll}
+                  disabled={importing}
+                >
                   Clear
                 </Button>
                 <Button
                   variant="secondary"
                   size="sm"
+                  className="max-sm:h-10 max-sm:text-sm"
                   leftIcon={<Plus className="h-4 w-4" />}
                   onClick={addRow}
                   disabled={importing}
@@ -479,6 +489,7 @@ export default function PersonnelImportPage() {
                 </Button>
                 <Button
                   size="sm"
+                  className="col-span-2 max-sm:h-11 max-sm:text-sm"
                   onClick={() => void runImport()}
                   isLoading={importing}
                   disabled={counts.ready === 0}
@@ -630,7 +641,7 @@ function FilterChip({
       onClick={onClick}
       aria-pressed={active}
       className={cn(
-        'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
+        'rounded-full border px-3 py-1 text-xs font-medium whitespace-nowrap transition-colors max-sm:px-2 max-sm:py-2',
         active
           ? tone === 'danger'
             ? 'border-danger bg-danger/10 text-danger'
